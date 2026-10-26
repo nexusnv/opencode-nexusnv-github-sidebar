@@ -1,0 +1,4 @@
+title = "opencode-nexusnv-github-sidebar gitleaks config"
+
+[extend]
+useDefault = true

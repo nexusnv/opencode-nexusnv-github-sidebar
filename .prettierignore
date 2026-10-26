@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+bun.lock
+*.tgz
+opencode-github-sidebar-plugin-research.md
