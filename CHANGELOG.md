@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- P0 GitHub workbench: server-side repository detection, integration/env/`gh` auth precedence, one-query GraphQL snapshots, normalization/sanitization, TTL + stale cache, and location-scoped `summary`/`prepareLaunch` RPCs.
+- Sidebar sections for the current-branch PR, the viewer's PRs/issues, and bounded other rows; PR CI/merge/draft/review detail and issue labels/assignees; empty, loading, stale, auth, unavailable, rate-limit, and error states; collapsible sections and refresh controls.
+- Worktree-backed launch: PR head/default-branch fetch, worktree reuse/creation, local branch creation, monorepo subpath handling, session metadata links, synthetic context with `resume: false`, and tab focus / router fallback.
+- Read-only `actions.enabled: false` mode that opens the browser and never touches sessions or git.
+- Server option parsing with an effective view returned over RPC; client-only `openLinks` (`auto`, `browser`, `osc8`).
+- Runtime contract validators on the TUI boundary and safe HTTPS/OSC 8 link handling.
+- Hermetic tests for remote parsing, auth precedence, cache/stale behavior, normalization, context limits, git/launch flows, service orchestration, TUI state/render/launch, and contract validation.
+- Opt-in live smoke test: `GITHUB_SIDEBAR_LIVE=1 bun run smoke:live`.
 - Loadable foundation: server and TUI plugins with a location-scoped `health` RPC, an additive `sidebar.content` claim, and local-directory entrypoint shims.
 - Credential integration methods for `GH_TOKEN`/`GITHUB_TOKEN` and a personal access token, plus a sanitized git environment and required-location guard.
 - Foundation tests: host resolution and loading for directory and package targets, default plugin exports, location enforcement and wire-shape narrowing, location-matched health gating, token stripping, TUI trust-boundary enforcement, and TUI rendering.
@@ -13,4 +21,8 @@ All notable changes to this project will be documented in this file.
 - Bun/TypeScript package contract, strict typecheck, Oxlint, Prettier, CI, secret scanning, dependency audit, and package export check.
 - Initial README, contributor guide, security policy, and agent implementation rules.
 
-P0 GitHub data and launch behavior are not implemented yet.
+### Changed
+
+- The issue launch query uses the `issueOrPullRequest` union because `Issue.pullRequest` does not exist in the GitHub schema.
+- GraphQL issue launch is rejected when the number resolves to a pull request.
+- The TUI hides and does not fetch for child sessions.
