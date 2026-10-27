@@ -26,11 +26,17 @@ try {
     }
   }
 
+  for (const shim of ["index.ts", "tui.tsx", "rpc.ts"]) {
+    if (!files.has(`package/${shim}`)) {
+      throw new Error(`packed tarball is missing local-directory shim: package/${shim}`)
+    }
+  }
+
   if (!files.has("package/package.json")) {
     throw new Error("packed tarball is missing package/package.json")
   }
 
-  console.log(`pack ok: ${targets.length} exports present`)
+  console.log(`pack ok: ${targets.length} exports and 3 directory shims present`)
 } finally {
   rmSync(tarball, { force: true })
 }

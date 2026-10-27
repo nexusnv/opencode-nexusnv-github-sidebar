@@ -6,9 +6,9 @@
 
 ## Current state
 
-The repository is a **foundation scaffold**. The package contract, toolchain, CI, docs, and security checks exist. P0 plugin behavior is not implemented yet.
+The repository is a **loadable foundation skeleton**. The server plugin, TUI plugin, and shared RPC contract export real default definitions; the server registers the plugin-owned credential methods and a location-scoped `health` RPC; the TUI appends a minimal GitHub marker to `sidebar.content` after `health` succeeds. Root shims make local-directory loading work.
 
-Do not treat placeholders in `src/` as a working plugin. Implement in the phase the user asks for, starting with P0.
+P0 GitHub behavior is **not** implemented. Do not treat the foundation marker as a working sidebar. Implement in the phase the user asks for, starting with P0.
 
 ## Source of truth
 
@@ -35,8 +35,13 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 
 - **Server plugin** (`src/index.ts`): repo detection, auth resolution, GitHub GraphQL, normalization, cache, `git fetch`, worktree creation, launch context.
 - **TUI plugin** (`src/tui.tsx`): `sidebar.content`, rows, sections, browser action, session creation, synthetic context, tab focus.
-- **Shared RPC** (`src/rpc.ts`): location-scoped contract. Every call passes `{ location: context.location }`.
-- Do not move credential resolution, git operations, or worktree creation into the TUI. A remote server would break.
+- **Shared RPC** (`src/rpc.ts`): location-scoped contract. Every call passes `{ location: requireRpcLocation(context) }`.
+- **Local-directory shims** (`index.ts`, `tui.tsx`, `rpc.ts`): thin re-exports. Directory targets probe `<dir>/server` then `<dir>/index`, then `tui` and `rpc`; package targets use `exports`.
+- Do not move credential resolution, git operations, or worktree creation into the TUI. A remote server would break, and the TUI client is not sandboxed.
+- The public TUI client is `context.client` (`OpenCodeClient`). There is no `.api` property; use `context.client.session.create/synthetic/list/get` and `context.client.rpc(...)`.
+- The TUI must never call `context.client.credential.*`, `file.*`, `pty.*`, `shell.*`, `experimental.*`, `worktree.*`, or `session.shell/command/background/environment`. OpenCode 2.1.4 injects a full server client, including `credential.list()` secret values; this is a trust boundary, not a host sandbox. `test/tui-boundary.test.ts` enforces it with a line-oriented tripwire; aliases and computed access still require review.
+- Use `requireRpcLocation` from `src/shared/location.ts` for every TUI RPC call. It reduces the runtime location object to `{ directory }`; never pass a raw optional `context.location` or silently fall back to the server's default location. Use `requireLocation` when code only needs to read the location.
+- Use `runGit` / `sanitizedGitEnv` from `src/shared/git.ts` for server git operations. Never spread `process.env` into a git child process.
 - Use `append: "sidebar.content"`, never `replace`.
 - Return the effective `view` (limits, scope, action flags, display flags, refresh interval) from the RPC. Do not read server options from `cli.json`.
 - `actions.worktree` is the master gate; `actions.issueWorktree` only narrows it for issues.
@@ -48,7 +53,9 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 
 ## Security rules
 
-- Tokens are server-only. Never return them over RPC, store them in TUI storage, log them, or pass them to git.
+- The plugin keeps tokens server-side. Never return them over RPC, store them in TUI storage, log them, or pass them to git. The platform does not enforce this: TUI code is trusted and must not use `credential.*`, `file.*`, `pty.*`, `shell.*`, `experimental.*`, `worktree.*`, or the `session` process methods (`shell`, `command`, `background`, `environment`).
+- Use `context.client.integration.list/connect` for auth state; never `credential.list` from the TUI.
+- Git subprocesses use the explicit `sanitizedGitEnv` allowlist; `GH_TOKEN`, `GITHUB_TOKEN`, askpass helpers, and unrelated secrets must not reach git.
 - Enforce the GitHub host allowlist before any token use.
 - HTTPS-only API URLs; reject redirects.
 - Sanitize titles, bodies, labels, and URLs before rendering.
@@ -62,5 +69,10 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 - Prettier: no semicolons, 120 columns.
 - `oxlint` must pass.
 - Tests use `bun:test`. TUI render tests use `testRender` from `@opentui/solid`.
+- Keep `test/preload.ts` registered through `bunfig.toml`'s `[test] preload`. It installs the same OpenTUI Solid transform/runtime the host uses; without it, JSX is static and effects are no-ops under Bun's default Solid server build.
+- `test/host.test.ts` must keep loading all three entrypoints through `@opencode/plugin/host`; a broken default export must fail CI.
+- Negative type tests live under `test/types/`. Keep the no-`.api`, no-`location.project`, and unknown-theme-token guards.
+- `@opencode/theme` is a devDependency so `context.theme` is fully typed. Do not remove it.
+- Keep `solid-js` at the host's `1.9.15` so the plugin and OpenCode share one Solid runtime. The `seroval` overrides are a security pin for the dev/test tree; re-evaluate them when the host upgrades.
 - Pin `@opencode/plugin` to `2.1.4` until a deliberate upgrade. Re-run typecheck and the report's platform checks on every OpenCode minor.
 - Keep P0 scope: no panel, OAuth, PR writes, GitLab/Bitbucket, or session-PR adoption until explicitly requested.

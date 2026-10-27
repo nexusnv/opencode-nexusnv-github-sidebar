@@ -5,7 +5,7 @@
 - **Date:** 2026-10-25
 - **Environment verified against:** OpenCode `v2.1.4`, `@opencode/plugin` `2.1.4`, OpenTUI `0.6.8`, `gh` `2.103.2`
 - **Research sources:** OpenCode 2.1.4 source checkout at `/tmp/opencode/opencode-src`, live GitHub GraphQL/REST API, published plugin packages, and prior-art TUI plugins
-- **Spike:** `/tmp/opencode/github-sidebar-spike` — a type-level server + TUI + RPC spike that passes `npx tsc --noEmit` against `@opencode/plugin@2.1.3` and `@opentui/*@0.6.8`
+- **Spike:** `/tmp/opencode/github-sidebar-spike-214` — a type-level server + TUI + RPC spike that passes `npx tsc --noEmit` against `@opencode/plugin@2.1.4` and `@opentui/*@0.6.8`
 
 ---
 
@@ -43,9 +43,9 @@ A V2 plugin can render a GitHub section in the OpenCode sidebar, detect the serv
 
 The important architectural finding is that this should **not** be a TUI-only plugin:
 
-- A TUI plugin runs on the **client** machine. `node:fs`, `Bun.spawn`, and `context.storage` see the client filesystem, not a remote server's.
-- `context.location` describes the **server's** directory, but the client's `vcs` API does not expose the git remote URL. A TUI-only plugin therefore cannot reliably detect the repository when the OpenCode server is remote.
-- Credentials are server-only. The TUI client can list integrations and start a connect flow, but it cannot resolve a stored secret.
+- A TUI plugin runs on the **client** machine. Its own `node:fs`, `Bun.spawn`, and `context.storage` see the client filesystem, not a remote server's.
+- `context.location` describes the **server's** directory, and the client's `vcs` API does not expose the git remote URL. Detect the repository on the server rather than reading `.git/config` through `client.file`, which would bypass the plugin's trust boundary.
+- OpenCode 2.1.4 does **not** sandbox the TUI client: `client.credential.list()` returns secret values, `client.file.*` reads/writes server files, and `client.pty.*` runs server commands. This plugin forbids those calls from the TUI and keeps auth resolution and git work in the server half. That is a code-level policy, not a host guarantee.
 - The clean solution is a **server plugin** that detects the repo, resolves the token, calls GitHub, and caches the result, plus a **TUI plugin** that renders the sidebar and calls the server through a **location-scoped RPC** method.
 
 A single GitHub GraphQL query returns everything the sidebar needs in one round trip: PR titles, URLs, draft state, author, comment counts, review counts, CI rollup state, mergeability, merge state, review decision, issue titles, issue authors, assignees, comment counts, labels, and true total counts. The query was measured at **1 rate-limit point** per refresh with 50 PRs plus 50 issues, including a pinned current-branch PR alias.
@@ -115,8 +115,8 @@ Non-goals for the MVP: merging PRs, posting comments, auto-sending a prompt to t
 | Click focuses a session | **Yes** | Session metadata `githubSidebar` + `ui.tabs.focus(sessionID)` | Only sessions created by this plugin carry the link; tabs may be disabled |
 | Click creates a worktree | **Yes** | Server RPC runs `git fetch`, then `ctx.worktree.create({ projectID, from, branch, name })` | Server needs git credentials for private repos; disk usage |
 | PR head checkout | **Yes** | `git fetch <remote> refs/pull/<n>/head:refs/opencode/pr/<n>` | Fork push semantics; submodules/LFS are not initialized |
-| Create a session at the worktree | **Yes** | `client.api.session.create({ location: { directory }, metadata, title })` | Location must resolve to the same project; monorepo subpath must be preserved |
-| Inject context without waking the agent | **Yes** | `client.api.session.synthetic({ text, description, resume: false })` | The composer cannot be prefilled; context appears as a notice row |
+| Create a session at the worktree | **Yes** | `client.session.create({ location: { directory }, metadata, title })` | Location must resolve to the same project; monorepo subpath must be preserved |
+| Inject context without waking the agent | **Yes** | `client.session.synthetic({ text, description, resume: false })` | The composer cannot be prefilled; context appears as a notice row |
 | Focus/open a tab | **Yes** | `ui.tabs.focus(sessionID)`; fallback `ui.router.navigate` | Tabs are optional; `focus` returns false when disabled |
 | Click opens browser | **Yes, with workaround** | `<a href>` + `onMouseUp` + OS opener | Now a secondary action, not the row's primary click |
 | Keyboard access | **Yes** | `context.keymap.layer` commands + panel | Sidebar rows themselves are not focusable |
@@ -139,7 +139,7 @@ A package can expose three entrypoints:
 
 ```json
 {
-  "name": "opencode-github-sidebar",
+  "name": "opencode-nexusnv-github-sidebar",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -271,33 +271,33 @@ Notes:
 | Panels | **Yes** | `session.panel` slot + `ui.panel.open/close/current` |
 | Attention / notifications | **Yes** | `context.attention.notify` |
 | Session tabs | **Yes** | `ui.tabs.enabled/list/open/focus/move/close` |
-| Create a session | **Yes** | `context.client.api.session.create({ location, metadata, title })` |
-| Admit context without running the agent | **Yes** | `context.client.api.session.synthetic({ text, description, resume: false })` |
-| Create a worktree | **Yes, via the server API** | `context.client.api.worktree.create({ projectID, from, branch, name })`; `git fetch` must run in a server plugin first |
+| Create a session | **Yes** | `context.client.session.create({ location, metadata, title })` |
+| Admit context without running the agent | **Yes** | `context.client.session.synthetic({ text, description, resume: false })` |
+| Create a worktree | **Yes, via the server plugin** | The server RPC calls `ctx.worktree.create({ projectID, from, branch, name })`; `git fetch` must run in the same server plugin first. Do not call `context.client.worktree.create` from the TUI. |
 | Prefill the composer | **No** | No plugin API writes the prompt draft; inject a synthetic context row instead |
 | `openUrl` / `Link` helper | **No** | Replicate; see §4.4 |
-| Credentials / secrets | **No** | Client credential API never returns a secret; `connection.resolve` is server-only |
-| Server-side git/fs | **No** | Use a server plugin + RPC |
+| Credentials / secrets | **Yes, but forbidden here** | `credential.list()` returns stored secret values in 2.1.4. The plugin uses `integration.list/connect` for auth state and never reads credentials from the TUI. |
+| Server-side git/fs | **Yes, but forbidden here** | `client.file.*` and `client.pty.*` reach the server. The plugin uses a server RPC for git/worktree work and treats the TUI as trusted code. |
 | DOM / `window.open` | **No** | Solid + OpenTUI, not a browser |
 
 ### 4.6 Remote server implications
 
-- The TUI plugin runs on the **client**. Its `node:fs`, `Bun.spawn`, and `context.storage` are the user's machine.
-- `context.client` talks to the connected server (local or remote).
+- The TUI plugin runs on the **client**. Its own `node:fs`, `Bun.spawn`, and `context.storage` are the user's machine.
+- `context.client` talks to the connected server (local or remote). In 2.1.4 it is a full server client: `credential.list()` returns secret values, `file.*` reads/writes server files, and `pty.*` runs server commands. The plugin must not use those APIs from the TUI; treat TUI code as trusted.
 - `context.location` and `context.data.*` describe the **server's** location.
 - `context.storage` is TUI-local; the server never sees it. Server plugins have a separate `ctx.storage`.
-- `context.client.vcs.get({ location })` returns branch/provider information but **not** the remote URL. A TUI-only plugin cannot reliably detect the GitHub repo for a remote server.
-- A server plugin + RPC is the only way to run git, resolve credentials, call GitHub with a stored token, and share a cache across clients.
-- Worktree creation, session creation, and synthetic context admission are **server-side operations** even when a TUI plugin calls them through `context.client`. The returned directory is a server path; do not resolve it against the client filesystem.
+- `context.client.vcs.get({ location })` returns branch/provider information but **not** the remote URL. Do not read `.git/config` with `client.file`; the server plugin owns repository detection.
+- The plugin's server half is where git, credential resolution, GitHub calls, and the shared cache belong. This keeps the design correct for remote servers and keeps token handling auditable; it is a plugin policy, not a platform sandbox.
+- Session creation and synthetic context admission are server-side operations that the TUI invokes through `context.client`. Worktree creation is different: it must stay in the server plugin RPC because it needs the server's git credentials, checkout, and worktree strategy. The returned directory is a server path; do not resolve it against the client filesystem. The TUI must not call `client.worktree.*`, even though 2.1.4 exposes it.
 - Tab focus is **client-side**. After the server creates the worktree and the TUI creates the session, call `ui.tabs.focus(sessionID)`; if tabs are disabled, navigate to the session route instead.
 
 RPC mechanics:
 
 - Define the contract in `rpc.ts` with `Rpc.define({ id, methods, events })`.
 - Server: `await ctx.rpc.register(Contract, { method: handler })`.
-- TUI: `const client = context.client.rpc(Contract); await client.method(input, { location: context.location })`.
+- TUI: `const client = context.client.rpc(Contract); await client.method(input, { location: requireRpcLocation(context) })`.
 - The HTTP endpoint is `POST /api/rpc/:rpcID/:method` with a `location` deep-object query. The group is location-scoped, so the call is dispatched to that location's registered RPC and waits for plugin activation.
-- **Pass `{ location: context.location }` explicitly.** The docs' TUI example omits it; on a multi-location server that silently targets the default location. If `context.location` is `undefined`, use `context.data.location.default()` or skip the call; do not assume the default location is the user's project.
+- **Pass `{ location: requireRpcLocation(context) }` explicitly.** The docs' TUI example omits it; on a multi-location server that silently targets the default location. The helper narrows the runtime location to `{ directory }` and throws `MissingLocationError` instead of falling back; do not assume the default location is the user's project.
 - RPC events are delivered on the normal event stream, prefixed `rpc.<id>.<name>`, carry `location`, and are live-only.
 
 ### 4.7 Theme tokens
@@ -358,17 +358,17 @@ const credential = connection
 
 `connection.active(id)` returns the first connection: saved credentials first, then env methods. `connection.resolve` returns `{ type: "key", key }`, `{ type: "oauth", access, refresh, expires, methodID }`, or `{ type: "external" }`. For an env connection it reads `process.env[name]` on the **server** and returns a key value.
 
-The TUI **cannot** resolve a credential. It can list integrations and start a connect flow:
+The plugin resolves credentials on the server. The TUI can list integrations and start a connect flow:
 
 ```ts
 await context.client.integration.connect.key({
   integrationID: "github-sidebar",
   key,
-  location: context.location,
+  location: requireRpcLocation(context),
 })
 ```
 
-The client credential HTTP group never returns a secret, and there is no `connection.resolve` on the client.
+There is no `connection.resolve` on the client, but **`client.credential.list()` returns stored secrets** in 2.1.4. The TUI half must never call it; treat TUI plugin code as trusted.
 
 ### 4.9 Options and config locations
 
@@ -471,7 +471,7 @@ The demand is real, but it is **niche**. The plugin should be positioned precise
 
 **How:** The server plugin detects the repo, resolves auth, calls GitHub, normalizes and caches; it also runs `git fetch` and creates the worktree when the user launches a PR/issue. The TUI plugin renders, calls location-scoped RPC methods, creates the session, injects context, and focuses the tab.
 
-**Pros:** Works with remote servers; uses OpenCode's credential store; server-side git and `gh`; shared cache; token never crosses to the client; the action model works for remote servers; testable layers.
+**Pros:** Works with remote servers; uses OpenCode's credential store; server-side git and `gh`; shared cache; the plugin's RPC never returns the token; the action model works for remote servers; testable layers.
 
 **Cons:** Two entrypoints; the server half must be installed on the server; slightly more code; RPC contract must be maintained; worktree creation is a side effect that needs cleanup and reuse logic.
 
@@ -496,9 +496,11 @@ The demand is real, but it is **niche**. The plugin should be positioned precise
 | Requires `gh` | Yes | No | Optional fallback | No |
 | Shared cache | No | No | **Yes** | No |
 | Worktree + session launch | Local only | Local only | **Yes, server-side** | Yes, but unsafe |
-| Token exposure | Local `gh` | Client storage | **Server only** | Client |
+| Token exposure | Local `gh` | Client storage | **Server by policy** | Client |
 | Complexity | Low | Medium | Medium | High risk |
 | Verdict | Prior art | Not recommended | **Recommended** | Reject |
+
+"Server by policy" means this plugin's RPC and code path keep the token in the server half. OpenCode 2.1.4 does not sandbox the TUI client (`credential.list()` returns secrets), so this is not a host-enforced boundary.
 
 ---
 
@@ -519,7 +521,7 @@ The demand is real, but it is **niche**. The plugin should be positioned precise
 │                                  │        │  git fetch + worktree creation       │
 │ session.panel (v0.2)             │        │  launch context query                │
 │  └─ full list + keyboard         │        │                                      │
-│                                  │        │  token never leaves the server       │
+│                                  │        │  RPC never returns the token         │
 │ session launch:                  │        │                                      │
 │  ├─ find linked session          │        │                                      │
 │  ├─ create session at worktree   │        │                                      │
@@ -535,7 +537,7 @@ The demand is real, but it is **niche**. The plugin should be positioned precise
 ### 7.2 Data flow
 
 1. Sidebar mounts with `{ sessionID }`.
-2. TUI calls `rpc.summary({ force? }, { location: context.location, signal })`.
+2. TUI calls `rpc.summary({ force? }, { location: requireRpcLocation(context), signal })`.
 3. Server handler:
    - Detects the repo with `git -C <ctx.location.directory>`.
    - If no git / no remote / non-GitHub host → returns a typed `status` and `repo: null`.
@@ -546,8 +548,8 @@ The demand is real, but it is **niche**. The plugin should be positioned precise
 5. **Primary click** on a row:
    - TUI looks for a root session whose `metadata.githubSidebar` matches `repo + kind + number`. If found, `data.session.sync`, then `ui.tabs.focus(sessionID)`; fall back to `ui.router.navigate` when tabs are disabled.
    - Otherwise TUI calls `rpc.prepareWorktree({ kind, number, worktree, headRefName?, isCrossRepository? }, { location })`. The server fetches the PR head or default branch, creates the worktree, creates a local branch, and returns `{ directory, subpath, branch, base, reused, context, description }`.
-   - TUI calls `client.api.session.create({ location: { directory: subpath ? path.join(directory, subpath) : directory }, title, metadata, agent?, model? })`.
-   - TUI calls `client.api.session.synthetic({ sessionID, text: context, description, metadata, resume: false })`.
+   - TUI calls `client.session.create({ location: { directory: subpath ? path.join(directory, subpath) : directory }, title, metadata, agent?, model? })`.
+   - TUI calls `client.session.synthetic({ sessionID, text: context, description, metadata, resume: false })`.
    - TUI calls `data.session.sync(sessionID)` and `ui.tabs.focus(sessionID)` unless `actions.focusTabs` is false.
 6. **Secondary action** (`o` or `↗`) calls `openExternal(url)`; the URL is the canonical GitHub `url` field.
 7. Refresh triggers: mount, branch update, `session.idle`, timer, manual command/button, after connect.
@@ -594,23 +596,17 @@ In the **server plugin**, using `ctx.location.directory`. Never use the TUI's `p
 
 ### 8.2 Commands
 
-Use `execFile`, not a shell, to avoid injection:
+Use the repository `runGit` helper (`src/shared/git.ts`), which wraps `execFile` without a shell and passes only an explicit environment allowlist:
 
 ```ts
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
-
-const run = promisify(execFile)
+import { runGit } from "../shared/git.js"
 
 async function git(args: string[], cwd: string) {
-  const { stdout } = await run("git", ["-C", cwd, ...args], {
-    timeout: 2_000,
-    maxBuffer: 1 << 20,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-  })
-  return stdout.trim()
+  return runGit(args, cwd, { timeoutMs: 2_000 })
 }
 ```
+
+`runGit` forces `GIT_TERMINAL_PROMPT=0` and never forwards `GH_TOKEN`, `GITHUB_TOKEN`, askpass helpers, or unrelated secrets. Do not replace it with a helper that spreads `process.env`.
 
 Recommended calls:
 
@@ -1213,7 +1209,7 @@ type LaunchContextCache = Record<string, {
 
 - **Worktree map (server storage):** key `projectID#host/owner/name#pull/123` or `#issue/123`. The project ID scopes the map to the project; clones of the same remote share a project ID (and the host's worktree base) by design, so the entry is shared across clones. Before creating, verify the directory still appears in `worktree.list({ projectID })` and that the branch matches. If not, drop the entry and create a new worktree. This prevents `pr-123-2`, `pr-123-3`, and orphaned worktrees after a failed session create.
 - **Launch context cache (server memory):** key `projectID#host/owner/name#kind/number`; TTL 5 minutes or until the item's `updatedAt` changes. A click usually follows a recent summary, so this is often a cache hit.
-- **Session map (TUI storage):** key `host/owner/name#kind/number` → `sessionID`. Treat it as a hint, not the source of truth: call `client.api.session.get` before focusing. If the session is gone, fall back to listing sessions and filtering `metadata.githubSidebar`, then to creating a new session. Session metadata is the portable source of truth across clients; the TUI map only avoids a list call.
+- **Session map (TUI storage):** key `host/owner/name#kind/number` → `sessionID`. Treat it as a hint, not the source of truth: call `client.session.get` before focusing. If the session is gone, fall back to listing sessions and filtering `metadata.githubSidebar`, then to creating a new session. Session metadata is the portable source of truth across clients; the TUI map only avoids a list call.
 - **Failed launch:** if worktree creation succeeds but session creation fails, keep the worktree map entry so the retry reuses the worktree instead of creating another one.
 
 ### 11.3 Refresh policy
@@ -1246,7 +1242,7 @@ const response = await fetch(endpoint, {
   headers: {
     "Authorization": `bearer ${token}`,
     "Content-Type": "application/json",
-    "User-Agent": `opencode-github-sidebar/${version}`,
+    "User-Agent": `opencode-nexusnv-github-sidebar/${version}`,
   },
   body: JSON.stringify({ query, variables }),
   redirect: "error",
@@ -1440,15 +1436,15 @@ TUI                                        Server
  │                                         │ git switch -c <branch>
  │ ◄── {directory, subpath, branch, base,  │
  │      reused, context, description}      │
- │ client.api.session.create({...}) ──────►│ server creates session
- │ client.api.session.synthetic({...}) ───►│ admits context, resume:false
+ │ client.session.create({...}) ──────►│ server creates session
+ │ client.session.synthetic({...}) ───►│ admits context, resume:false
  │ data.session.sync(sessionID)            │
  │ ui.tabs.focus(sessionID) (focusTabs)    │
 ```
 
 The split matters:
 
-- **Server RPC** owns git and worktree creation. The server has the project's registered checkout, the git credentials, and the worktree strategy. The TUI cannot run `git fetch` on a remote server.
+- **Server RPC** owns git and worktree creation. The server has the project's registered checkout, the git credentials, and the worktree strategy. The TUI must not run `git fetch` (even though `client.pty` could); the server owns it.
 - **TUI** owns session creation, context injection, and tab focus. It has the current model/agent selection and the tab UI. Session creation is still a server API call; the TUI is just the caller.
 - If session creation fails after the worktree exists, keep the worktree map entry so the retry reuses it. Do not create `pr-123-2` on every retry.
 
@@ -1502,7 +1498,7 @@ const metadata = {
   },
 }
 
-const session = await context.client.api.session.create({
+const session = await context.client.session.create({
   title: `PR #123 · ${truncate(pr.title, 60)}`,
   location: { directory: subpath ? path.join(worktreeDirectory, subpath) : worktreeDirectory },
   metadata,
@@ -1510,7 +1506,7 @@ const session = await context.client.api.session.create({
   // model: { providerID, id: modelID, variant },
 })
 
-await context.client.api.session.synthetic({
+await context.client.session.synthetic({
   sessionID: session.id,
   text: contextText,
   description: `PR #123 · owner/name`,
@@ -1786,7 +1782,7 @@ That is intentionally minimal. Everything else is server-side and returned in `v
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "opencode-github-sidebar",
+      "package": "opencode-nexusnv-github-sidebar",
       "options": {
         "hosts": ["github.com"],
         "scope": "auto",
@@ -1826,7 +1822,7 @@ Use project config when only one repository should show GitHub data:
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "opencode-github-sidebar",
+      "package": "opencode-nexusnv-github-sidebar",
       "options": {
         "scope": "all",
         "pulls": { "limit": 5 },
@@ -1846,7 +1842,7 @@ Project config merges over global config. `opencode plugin add` writes to the **
 {
   "plugins": [
     {
-      "package": "opencode-github-sidebar",
+      "package": "opencode-nexusnv-github-sidebar",
       "options": {
         "hosts": ["github.com", "ghe.example.com"],
         "refreshSeconds": 120,
@@ -1870,7 +1866,7 @@ gh auth login --hostname ghe.example.com
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "opencode-github-sidebar",
+      "package": "opencode-nexusnv-github-sidebar",
       "options": {
         "openLinks": "osc8"
       }
@@ -1888,7 +1884,7 @@ This entry is **only** needed to override TUI options. The package itself is alr
 {
   "plugins": [
     {
-      "package": "/home/me/opencode-github-sidebar",
+      "package": "/home/me/opencode-nexusnv-github-sidebar",
       "options": { "debug": true }
     }
   ]
@@ -1900,14 +1896,14 @@ This entry is **only** needed to override TUI options. The package itself is alr
 {
   "plugins": [
     {
-      "package": "/home/me/opencode-github-sidebar",
+      "package": "/home/me/opencode-nexusnv-github-sidebar",
       "options": { "openLinks": "browser" }
     }
   ]
 }
 ```
 
-Local directories must be directories, not single files. The host resolves `<dir>/index`/`<dir>/server`, `<dir>/tui`, and `<dir>/rpc`.
+Local directories must be directories, not single files. The host probes `<dir>/server` before `<dir>/index` (server), then `<dir>/tui` and `<dir>/rpc`. This repository keeps thin root shims (`index.ts`, `tui.tsx`, `rpc.ts`) for that path; package targets use the `exports` map instead.
 
 ### 14.9 Auth setup
 
@@ -1949,11 +1945,14 @@ gh auth login --hostname ghe.example.com
 ### 15.1 File tree
 
 ```
-opencode-github-sidebar/
+opencode-nexusnv-github-sidebar/
 ├── package.json
 ├── tsconfig.json
 ├── README.md
 ├── LICENSE
+├── index.ts                     # local-directory server shim
+├── tui.tsx                      # local-directory TUI shim
+├── rpc.ts                       # local-directory RPC shim
 ├── src/
 │   ├── index.ts                 # server plugin entry
 │   ├── tui.tsx                  # TUI plugin entry
@@ -2043,7 +2042,7 @@ The estimate assumes one developer familiar with Solid/OpenTUI. The largest unce
 
 ## 16. Code sketches
 
-These are intentionally condensed. The spike at `/tmp/opencode/github-sidebar-spike` contains a type-checking server + TUI + RPC skeleton.
+These are intentionally condensed. The spike at `/tmp/opencode/github-sidebar-spike-214` contains a type-checking server + TUI + RPC skeleton.
 
 ### 16.1 Shared RPC contract (`src/rpc.ts`)
 
@@ -2225,10 +2224,7 @@ export default Plugin.define({
 ### 16.3 Repo detection (`src/server/repo.ts`)
 
 ```ts
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
-
-const run = promisify(execFile)
+import { runGit } from "../shared/git.js"
 
 export type Repo = {
   host: string
@@ -2242,12 +2238,7 @@ export type RepoResult =
   | { status: "no-git" | "no-remote" | "unsupported-host"; message?: string }
 
 async function git(args: string[], cwd: string) {
-  const { stdout } = await run("git", ["-C", cwd, ...args], {
-    timeout: 2_000,
-    maxBuffer: 1 << 20,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-  })
-  return stdout.trim()
+  return runGit(args, cwd, { timeoutMs: 2_000 })
 }
 
 export async function detectRepo(
@@ -2400,6 +2391,7 @@ In production, inject the integration/gh runner for testability instead of using
 import { Plugin } from "@opencode/plugin/tui"
 import type { Context } from "@opencode/plugin/tui/context"
 import { GithubSidebarRpc } from "./rpc.js"
+import { requireRpcLocation } from "./shared/location.js"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import open from "open"
 
@@ -2516,7 +2508,7 @@ function Sidebar(props: { context: Context; sessionID: string }) {
       const client = props.context.client.rpc(GithubSidebarRpc)
       const result = await client.summary(
         { force },
-        { location: props.context.location, signal: controller.signal },
+        { location: requireRpcLocation(props.context), signal: controller.signal },
       )
       setSummary(result as Summary)
       setError(undefined)
@@ -2627,14 +2619,11 @@ The sketch is intentionally incomplete: it omits issues, collapse, connect CTA, 
 
 ### 16.6 Server launch RPC (`src/server/launch.ts`)
 
-The server half of the launch is the part a TUI-only plugin cannot do on a remote server. It resolves the project, fetches the exact ref, creates the worktree, creates a local branch, and builds the context.
+The server half of the launch is the part the TUI must delegate to the server. It resolves the project, fetches the exact ref, creates the worktree, creates a local branch, and builds the context.
 
 ```ts
 import path from "node:path"
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
-
-const run = promisify(execFile)
+import { runGit } from "../shared/git.js"
 
 type LaunchInput = {
   kind: "pull" | "issue"
@@ -2664,12 +2653,7 @@ type LaunchContext = {
 }
 
 async function git(args: string[], cwd: string, timeout: number) {
-  const { stdout } = await run("git", ["-C", cwd, ...args], {
-    timeout,
-    maxBuffer: 4 << 20,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-  })
-  return stdout.trim()
+  return runGit(args, cwd, { timeoutMs: timeout })
 }
 
 export async function prepareWorktree(
@@ -2830,6 +2814,7 @@ The TUI owns the session, the synthetic context, and the tab. It must not assume
 ```ts
 import path from "node:path"
 import { openExternal } from "./open.js"
+import { requireRpcLocation } from "../shared/location.js"
 
 type Launchable = {
   number: number
@@ -2878,7 +2863,7 @@ export async function launchItem(
         headRefName: item.headRefName,
         isCrossRepository: item.isCrossRepository,
       },
-      { location: context.location },
+      { location: requireRpcLocation(context) },
     )
   } catch (cause) {
     context.ui.toast.show({
@@ -2894,7 +2879,7 @@ export async function launchItem(
     ? path.join(prepared.directory, prepared.subpath)
     : prepared.directory
 
-  const session = await context.client.api.session.create({
+  const session = await context.client.session.create({
     title: `${kind === "pull" ? "PR" : "Issue"} #${item.number} · ${truncate(item.title, 60)}`,
     location: { directory },
     metadata: {
@@ -2912,7 +2897,7 @@ export async function launchItem(
   })
 
   // 5. Admit context without waking the agent.
-  await context.client.api.session.synthetic({
+  await context.client.session.synthetic({
     sessionID: session.id,
     text: prepared.context,
     description: prepared.description,
@@ -2930,11 +2915,16 @@ export async function findLinkedSession(
   kind: "pull" | "issue",
   number: number,
 ) {
-  const response = await context.client.api.session.list({
+  // The public TUI type is LocationRef; the runtime value is the server's
+  // location info and may carry `project`. Do not rely on either: resolve the
+  // project explicitly and send only `{ directory }` over RPC.
+  const location = requireRpcLocation(context)
+  const info = await context.client.location.get({ location })
+  const response = await context.client.session.list({
     parentID: null,
     limit: 100,
     order: "desc",
-    project: context.location.project.id,
+    project: info.project.id,
   })
   const matches = response.data.filter((session) => {
     const link = session.metadata?.githubSidebar as
@@ -2960,6 +2950,7 @@ Notes:
 
 - `session.list({ parentID: null })` is the server-side filter for root sessions. Do not fetch children and filter client-side if the API supports it; if a version ignores `parentID: null`, filter on `session.parentID == null` after the call.
 - The sketch lists the 100 most recent root sessions. For users with more, check the TUI session map first (`host/repo#kind/number` → `sessionID`), validate with `session.get`, and only then paginate the list. Cap the scan (for example 500 sessions) and fall back to creating a new session rather than walking the entire history on every click.
+- The public TUI location type is `LocationRef`; the runtime value is the server's `Location.GetOutput` (`{ directory, project }`), so `.project` exists at runtime even though it is absent from the public type. Do not rely on either shape: resolve the project with `context.client.location.get({ location: requireRpcLocation(context) })`, and send only `{ directory }` to RPC. Never fall back to the server's default location.
 - Session metadata is the durable contract. The plugin's TUI storage map is only a cache and must be validated with `session.get` before use.
 - `session.create` accepts `metadata`; it is inherited by children and forks, so always filter to root sessions when linking.
 - `session.synthetic` with `resume: false` admits the context without waking the agent. The UI shows `description`; the model sees `text`.
@@ -2967,7 +2958,7 @@ Notes:
 - If `session.create` fails after the worktree exists, keep the worktree map entry; the retry will reuse it.
 - The TUI's `context.options` are **client** options only (`openLinks`). `actions.enabled` and `actions.worktree` are server-side and must come from the RPC `view`; pass them into `launchItem` rather than reading `context.options`.
 - `actions.confirm` is handled by the row/panel click wrapper, not inside `launchItem`: show a small confirm dialog naming the repo, item, and target branch before calling the launch. The sketch passes it through but does not render the dialog.
-- `currentRepo` must come from the last RPC summary (repo header), not from local `git` in the TUI. On a remote server the client may not have the repository at all.
+- `currentRepo` must come from the last RPC summary (repo header), not from local `git` in the TUI. On a remote server the client machine may not have the repository; `client.file` would read the server, but the TUI must not use it.
 - The link match is repo-level (`host/owner/name#kind/number`), not clone-level. Clones of the same remote share a project ID, so a session created in one clone can be focused from another. If clone isolation matters, add the session's `location.directory` (or a project-directory field) to `metadata.githubSidebar` and require it to match; the current sketch intentionally keeps the link portable.
 - `focusTabs: false` still creates the session; it just does not steal focus. The new session appears in the tab list/session picker.
 
@@ -3114,7 +3105,7 @@ npx tsc --noEmit
 bun test
 ```
 
-Pin `@opencode/plugin` to the supported version and re-run typecheck on every OpenCode minor. The spike used 2.1.3; 2.1.4 is current. If `~/.npmrc` has `min-release-age`, install with `--min-release-age=0` when testing a just-published version.
+Pin `@opencode/plugin` to the supported version and re-run typecheck on every OpenCode minor. The spike and this repository target 2.1.4. If `~/.npmrc` has `min-release-age`, install with `--min-release-age=0` when testing a just-published version.
 
 ---
 
@@ -3151,10 +3142,12 @@ Pin `@opencode/plugin` to the supported version and re-run typecheck on every Op
 | 27 | Prompt injection in PR/issue bodies | High | High | Delimit and label untrusted content; instruct the agent to treat it as background only; never auto-send a prompt |
 | 28 | Tabs disabled / focus fails | Low | Low | `ui.tabs.focus` returns false → router navigate |
 | 29 | Multiple sessions for one item | Medium | Low | Most-recent wins; `N sessions` badge; picker in v0.2 |
+| 30 | TUI plugin uses unsandboxed server APIs | High | Medium | CI tripwire forbids `client.credential/file/pty/shell/experimental/worktree` and `session.shell/command/background/environment`; TUI code is trusted; docs state the host limitation |
 
 ### 18.1 Security checklist
 
-- [ ] Token only on the server; never in RPC, TUI storage, logs, or toasts.
+- [ ] Token only on the server in the intended path; never in RPC, TUI storage, logs, or toasts. The TUI is unsandboxed, so this is a code policy, not a host guarantee.
+- [ ] TUI never calls `client.credential.*`, `file.*`, `pty.*`, `shell.*`, `experimental.*`, `worktree.*`, or `session.shell/command/background/environment`; the host does not sandbox these. The source tripwire is line-oriented, so aliases and computed access still require review.
 - [ ] Host allowlist enforced before any token use.
 - [ ] HTTPS-only API URL; `redirect: "error"`.
 - [ ] Remote URL credentials stripped and never reused.
@@ -3194,7 +3187,7 @@ Pin `@opencode/plugin` to the supported version and re-run typecheck on every Op
 8. **Session PRs:** should the plugin also adopt PRs created by the current session (overlap with `opencode-prs`), or stay project-level?
 9. **Auth UX:** is `/connect` acceptable, or do you want a custom masked token dialog? The host prompt has no mask in 2.1.4.
 10. **GHES:** which versions/hosts must be supported? This affects schema leniency and testing.
-11. **Publishing:** npm package name `opencode-github-sidebar` is available as of 2026-10-25 (404 on npm), but confirm the scope/name before publishing.
+11. **Publishing:** the repository/package name is `opencode-nexusnv-github-sidebar` and the package is currently private. Confirm npm availability, scope, and public/private visibility before publishing.
 12. **License:** MIT is the simplest default for an OpenCode plugin.
 
 **Resolved:** the earlier "row click opens the browser" contract is superseded. Primary click launches/focuses; the browser is a secondary action (`o` / `↗`); `actions.enabled: false` restores browser-on-click.
@@ -3211,7 +3204,7 @@ Pin `@opencode/plugin` to the supported version and re-run typecheck on every Op
 - Session PRs: out of scope initially.
 - Auth: `/connect` + env + `gh`.
 - GHES: best-effort, lenient parsing.
-- Publish: `opencode-github-sidebar`, MIT.
+- Publish: confirm the `opencode-nexusnv-github-sidebar` name and visibility first; MIT license.
 
 ---
 
@@ -3388,14 +3381,14 @@ This is the exact query in §10.2, including `viewer { login }`, `defaultBranchR
 
 ### A.11 Type-level spike
 
-`/tmp/opencode/github-sidebar-spike` contains:
+`/tmp/opencode/github-sidebar-spike-214` contains:
 
 - `index.ts` — server plugin with integration registration and RPC.
 - `tui.tsx` — sidebar slot with RPC call and row skeleton.
 - `rpc.ts` — shared contract with JSON Schema.
 - `tsconfig.json`.
 
-`npx tsc --noEmit` passes against `@opencode/plugin@2.1.3`, `@opentui/core@0.6.8`, and `@opentui/solid@0.6.8`. The installed OpenCode is `v2.1.4`; `@opencode/plugin@2.1.4` is published. Re-run typecheck after bumping.
+`npx tsc --noEmit` passes against `@opencode/plugin@2.1.4`, `@opentui/core@0.6.8`, and `@opentui/solid@0.6.8`; the intentional negative probes use `@ts-expect-error`. The installed OpenCode and this repository's dependency are `2.1.4`. Re-run typecheck after bumping.
 
 ### A.12 Platform facts (source references)
 
@@ -3493,7 +3486,7 @@ This is the exact query in §10.2, including `viewer { login }`, `defaultBranchR
 - `/tmp/opencode/opencode-plugin-notes.md` — detailed V2 plugin/TUI/sidebar/RPC/auth/packaging notes with source line references.
 - `/tmp/opencode/github-api-notes.md` — detailed GraphQL/REST/`gh`/rate-limit/enum findings with verified commands.
 - `/tmp/opencode/opencode-src` — OpenCode 2.1.4 source checkout.
-- `/tmp/opencode/github-sidebar-spike` — type-checking server + TUI + RPC spike.
+- `/tmp/opencode/github-sidebar-spike-214` — type-checking server + TUI + RPC spike.
 - `/tmp/opencode/final-sidebar.graphql` — the earlier verified query with the branch alias.
 - `/tmp/opencode/sidebar-cost.graphql` — the 50 PR + 50 issue cost test query.
 - `/tmp/opencode/report-query.graphql` — the exact query in §10.2, verified at 1 point with 50/50.
@@ -3506,7 +3499,7 @@ This is the exact query in §10.2, including `viewer { login }`, `defaultBranchR
 
 The plugin is technically straightforward once the architecture is right. The hard parts are not the GraphQL query or the sidebar rendering; they are:
 
-1. **Getting the server/client boundary right** so remote servers work and tokens never leave the server.
+1. **Getting the server/client boundary right** so remote servers work and the plugin's RPC never returns tokens.
 2. **Making the 36-cell sidebar readable** while still showing title, comments, CI, and merge status.
 3. **Making auth unsurprising** in a product with no general GitHub integration.
 4. **Making launch safe and predictable** — worktree reuse, fork semantics, monorepo subpaths, and session linking are where the real bugs live.

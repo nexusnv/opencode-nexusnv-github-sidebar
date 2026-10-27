@@ -16,7 +16,7 @@ bun run audit
 bun run pack:check
 ```
 
-`bun run check` runs formatting, lint, strict typecheck, and tests. `bun run audit` fails on high/critical dependency advisories. `pack:check` verifies that every `exports` target is present in the packed tarball.
+`bun run check` runs formatting, lint, strict typecheck, and tests. `bun run audit` fails on high/critical dependency advisories. `pack:check` verifies that every `exports` target and local-directory shim is present in the packed tarball.
 
 ## Scope
 
@@ -34,7 +34,7 @@ Do not add the full-list panel, OAuth device flow, PR writes, GitLab/Bitbucket, 
 
 ## Architecture
 
-Read [AGENTS.md](./AGENTS.md) and §7, §12.8, §14, and §18 of the research report. The server/TUI split is load-bearing: do not move server-only work into the TUI.
+Read [AGENTS.md](./AGENTS.md) and §7, §12.8, §14, and §18 of the research report. The server/TUI split is load-bearing: keep credentials, git, and worktree creation on the server, and never use the TUI's unsandboxed server APIs.
 
 ## Security
 
