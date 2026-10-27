@@ -26,3 +26,8 @@ All notable changes to this project will be documented in this file.
 - The issue launch query uses the `issueOrPullRequest` union because `Issue.pullRequest` does not exist in the GitHub schema.
 - GraphQL issue launch is rejected when the number resolves to a pull request.
 - The TUI hides and does not fetch for child sessions.
+- README requirements now state that the P0 flow is verified on OpenCode 2.2.0 as well as the pinned 2.1.4 types.
+
+### Fixed
+
+- TUI lifecycle state now lives in `src/tui/state.tsx`. OpenCode 2.2.0 rewrites `solid-js` to the host runtime for `.tsx` sources only; the previous `.ts` module loaded the plugin's own Solid server build, so effects never tracked the host's location and the sidebar stayed on "Loading GitHub…". `test/tui-runtime.test.ts` blocks runtime host imports from `.ts` sources.

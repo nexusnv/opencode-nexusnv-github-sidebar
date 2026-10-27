@@ -62,7 +62,7 @@ The second differentiator is **action**. OpenCode exposes worktree creation, ses
 
 **Go/no-go:** build it if you want a zero-`gh`, remote-capable, project-level workbench that both shows GitHub work and starts an OpenCode session from it. If you only need the current branch's PR or PRs created by the current session, existing plugins already cover that well; see §5.
 
-**Implementation status (2026-10-27):** P0 is implemented and tested. The shipped TUI is split into lifecycle state (`src/tui/state.ts`), rendering (`src/tui/sidebar.tsx`, `row.tsx`), formatting (`format.ts`), link handling (`open.ts`), and launch orchestration (`launch.ts`). Two corrections were found during live validation: the issue launch query uses the `issueOrPullRequest` union (see §10.2.1), and the TUI must not instantiate sidebar state for child sessions because the slot is hidden there.
+**Implementation status (2026-10-27):** P0 is implemented and tested. The shipped TUI is split into lifecycle state (`src/tui/state.tsx`), rendering (`src/tui/sidebar.tsx`, `row.tsx`), formatting (`format.ts`), link handling (`open.ts`), and launch orchestration (`launch.ts`). Two corrections were found during live validation: the issue launch query uses the `issueOrPullRequest` union (see §10.2.1), and the TUI must not instantiate sidebar state for child sessions because the slot is hidden there.
 
 ### Top risks
 
