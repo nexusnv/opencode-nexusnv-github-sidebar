@@ -56,7 +56,8 @@
     "test:watch": "bun test --watch",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test",
     "audit": "bun run scripts/audit.ts",
-    "pack:check": "bun run scripts/assert-pack.ts"
+    "pack:check": "bun run scripts/assert-pack.ts",
+    "smoke:live": "bun run scripts/live-smoke.ts"
   },
   "dependencies": {
     "open": "11.0.4"

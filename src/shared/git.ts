@@ -51,6 +51,7 @@ export function sanitizedGitEnv(options: SanitizedGitEnvOptions = {}): Record<st
 
 export interface RunGitOptions extends SanitizedGitEnvOptions {
   readonly timeoutMs?: number
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -67,6 +68,7 @@ export function runGit(args: readonly string[], cwd: string, options: RunGitOpti
         maxBuffer: 4 << 20,
         env: sanitizedGitEnv({ env: options.env ?? process.env }),
         windowsHide: true,
+        ...(options.signal ? { signal: options.signal } : {}),
       },
       (error, stdout) => {
         if (error) {
