@@ -1,3 +1,14 @@
+/**
+ * This module intentionally uses the `.tsx` extension even though it renders
+ * no JSX.
+ *
+ * Observed on OpenCode 2.2.0: the TUI resolves `solid-js` for plugin sources
+ * through its Solid transform. That transform applies to `.tsx` modules; a
+ * `.ts` module falls back to the plugin's own `solid-js` dependency, which Bun
+ * resolves to the server build. Mixing the two copies is silent: the component
+ * renders, but effects created here never track the host's location, session,
+ * or theme signals. `test/tui-runtime.test.ts` enforces the extension rule.
+ */
 import type { Context } from "@opencode/plugin/tui/context"
 import { createEffect, createSignal, on, onCleanup } from "solid-js"
 import { GithubSidebarRpc } from "../rpc.js"
