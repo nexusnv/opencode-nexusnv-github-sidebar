@@ -6,6 +6,8 @@
 
 A project-level GitHub workbench for OpenCode V2. It shows the current repository's open pull requests and issues in the sidebar, prioritizes the viewer's work, and turns a row into a worktree-backed OpenCode session with the GitHub context already attached.
 
+![The GitHub sidebar in an OpenCode session: repository header, branch and counts, pull requests with CI and merge detail, and issues](./docs/sidebar.png)
+
 > **Status: P0 (v0.1).** Repository detection, auth, one GraphQL snapshot, normalization, caching, the sidebar, and the worktree/session launch path are implemented. See [Current limitations](#current-limitations) for deliberately deferred P1/P2 work, and [v0.1.0 readiness](./docs/v0.1.0-readiness.md) for the real-host verification and release checklist.
 
 The verified design and OpenCode 2.1.4 API research live in [opencode-github-sidebar-plugin-research.md](https://github.com/nexusnv/opencode-nexusnv-github-sidebar/blob/main/opencode-github-sidebar-plugin-research.md).
