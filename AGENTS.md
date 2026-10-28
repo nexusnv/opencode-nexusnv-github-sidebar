@@ -86,4 +86,4 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 - `@opencode/theme` is a devDependency so `context.theme` is fully typed. Do not remove it.
 - Keep `solid-js` at the host's `1.9.15` so the plugin and OpenCode share one Solid runtime. The `seroval` overrides are a security pin for the dev/test tree; re-evaluate them when the host upgrades.
 - Pin `@opencode/plugin` to `2.1.4` until a deliberate upgrade. Re-run typecheck and the report's platform checks on every OpenCode minor.
-- Keep P0 scope: no panel, OAuth, PR writes, GitLab/Bitbucket, or session-PR adoption until explicitly requested.
+- Keep the P1 scope: no OAuth device flow, persistent server cache, session-PR adoption, PR writes, GitLab/Bitbucket, panel search/pagination, or review-requested filter until explicitly requested.
