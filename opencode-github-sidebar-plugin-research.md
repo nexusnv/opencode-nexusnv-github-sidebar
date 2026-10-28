@@ -1416,6 +1416,8 @@ Implementation:
 - Reuse the same RPC summary; the server cache makes opening the panel cheap.
 - Limit to 100 rows per section (the per-request GraphQL maximum) and show `showing 100 of 1,250` with a link to GitHub for more; cursor pagination can come later.
 
+**Implementation status (0.2.0).** Shipped as `session.panel` with `summary({ full: true })`; the server caches one full snapshot and returns every row fetched under `fetchLimit` (default 50, max 100). The panel adds mine/all filters, `j`/`k` navigation, `enter`/`o`/`r`/`m`/`a`/`f`/`esc`, true-total section headers, and a `showing N of TOTAL` line. It does not paginate, search, or filter by review request yet. `ctrl+shift+g` toggles it from any route; child sessions and non-session routes are rejected. The keymap layer is enabled only while the panel is focused.
+
 ### 12.8 Action model: launch from a PR or issue
 
 This is the feature that separates the plugin from `opencode-prs`. `opencode-prs` only knows PRs it watched being created by the current session; it cannot show an existing Dependabot PR, a contributor PR, or an issue, and it cannot start work from one. This plugin lists repo-level items, so the natural next action is: **open the item in OpenCode**.
@@ -1652,9 +1654,9 @@ This is a deliberate product change, not an accident. If browser-on-click is mor
 
 ### P1 — v0.2
 
-- Full-list `session.panel` with keyboard navigation and mine/all filters.
-- Section collapse persisted in TUI storage.
-- `+ N more` and true totals.
+- Full-list `session.panel` with keyboard navigation and mine/all filters. **Shipped in 0.2.0.**
+- Section collapse persisted in TUI storage. **Shipped in 0.2.0**, seeded once from `display.collapsed`.
+- `+ N more` and true totals. **Shipped in P0; reverified in 0.2.0.** The panel adds `showing N of TOTAL`.
 - "Link this session to a PR/issue" action for pre-existing sessions.
 - "Show launch context" read-only dialog.
 - `actions.contextDisplay: "notice" | "message"` with prompt-injection guidance.
