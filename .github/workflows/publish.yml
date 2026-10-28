@@ -73,11 +73,11 @@ jobs:
           PACKAGE: opencode-nexusnv-github-sidebar
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          for attempt in 1 2 3 4 5; do
+          for attempt in $(seq 1 12); do
             if npm view "$PACKAGE@$VERSION" version; then
               exit 0
             fi
-            sleep 5
+            sleep 10
           done
           echo "::error::$PACKAGE@$VERSION is not visible on the registry"
           exit 1
@@ -91,3 +91,11 @@ jobs:
           else
             gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
           fi
+      - name: Deprecate the broken 0.1.0 release
+        if: steps.release.outputs.version == '0.1.1'
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm deprecate "opencode-nexusnv-github-sidebar@0.1.0" \
+            "Broken packaging: the TUI entrypoint cannot run. Use 0.1.1."

@@ -24,6 +24,7 @@ If the report and the installed OpenCode source disagree, inspect the installed 
 bun install
 bun run check          # format check + lint + typecheck + tests
 bun run audit          # high/critical dependency gate
+bun run build          # compile dist/ for the published package
 bun run typecheck
 bun run lint
 bun run format
@@ -40,6 +41,7 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 - **TUI plugin** (`src/tui.tsx`, `src/tui/`): `sidebar.content`, rows, sections, browser action, session creation, synthetic context, tab focus. Lifecycle state lives in `src/tui/state.tsx`; the UI is split across `sidebar.tsx`, `row.tsx`, `format.ts`, `open.ts`, and `launch.ts`.
 - **Shared RPC** (`src/rpc.ts`): location-scoped contract. Every call passes `{ location: requireRpcLocation(context) }`.
 - **Local-directory shims** (`index.ts`, `tui.tsx`, `rpc.ts`): thin re-exports. Directory targets probe `<dir>/server` then `<dir>/index`, then `tui` and `rpc`; package targets use `exports`.
+- **Published package build** (`scripts/build.ts`): `bun run build` compiles `src/index.ts`, `src/rpc.ts`, and `src/tui.tsx` into `dist/` with `@opentui/solid/bun-plugin`, externalizing `@opencode/plugin*`, `@opentui/*`, `solid-js`, and `open`. Package `exports` must point at `dist/`, not source. OpenTUI's Solid transform skips `node_modules`, so a published `.tsx` entrypoint loads as static JSX and never renders. `test/host.test.ts` loads the package entrypoints and `scripts/assert-pack.ts` checks the packed TUI output.
 - Do not move credential resolution, git operations, or worktree creation into the TUI. A remote server would break, and the TUI client is not sandboxed.
 - The public TUI client is `context.client` (`OpenCodeClient`). There is no `.api` property; use `context.client.session.create/synthetic/list/get` and `context.client.rpc(...)`.
 - The TUI must never call `context.client.credential.*`, `file.*`, `pty.*`, `shell.*`, `experimental.*`, `worktree.*`, or `session.shell/command/background/environment`. OpenCode 2.1.4 injects a full server client, including `credential.list()` secret values; this is a trust boundary, not a host sandbox. `test/tui-boundary.test.ts` enforces it with a line-oriented tripwire; aliases and computed access still require review.

@@ -17,8 +17,9 @@ import { SIDEBAR_QUERY } from "../src/server/query.js"
 import { detectRepo } from "../src/server/repo.js"
 import { graphqlEndpoint } from "../src/shared/remote.js"
 import type { RepoRef } from "../src/shared/types.js"
+import { VERSION } from "../src/shared/version.js"
 
-const USER_AGENT = "opencode-nexusnv-github-sidebar/0.1.0"
+const USER_AGENT = `opencode-nexusnv-github-sidebar/${VERSION}`
 
 if (process.env.GITHUB_SIDEBAR_LIVE !== "1") {
   console.log("live smoke skipped: set GITHUB_SIDEBAR_LIVE=1 to call the GitHub API")

@@ -1,6 +1,7 @@
 # opencode-nexusnv-github-sidebar
 
 [![CI](https://github.com/nexusnv/opencode-nexusnv-github-sidebar/actions/workflows/ci.yml/badge.svg)](https://github.com/nexusnv/opencode-nexusnv-github-sidebar/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/opencode-nexusnv-github-sidebar.svg)](https://www.npmjs.com/package/opencode-nexusnv-github-sidebar)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 A project-level GitHub workbench for OpenCode V2. It shows the current repository's open pull requests and issues in the sidebar, prioritizes the viewer's work, and turns a row into a worktree-backed OpenCode session with the GitHub context already attached.

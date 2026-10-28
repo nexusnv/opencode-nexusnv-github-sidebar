@@ -144,9 +144,9 @@ A package can expose three entrypoints:
   "name": "opencode-nexusnv-github-sidebar",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./tui": "./src/tui.tsx",
-    "./rpc": "./src/rpc.ts"
+    ".": "./dist/index.js",
+    "./tui": "./dist/tui.js",
+    "./rpc": "./dist/rpc.js"
   }
 }
 ```
@@ -156,8 +156,10 @@ A package can expose three entrypoints:
 - For packages, `./tui` must be a real `exports` subpath.
 - `@opencode/plugin` is declared for **types**; at runtime the host intercepts `@opencode/plugin/*` and `effect/*` and returns its own instances. `solid-js` also resolves to the host copy, which is what makes plugin JSX and host reactivity share one runtime.
 - Ordinary npm dependencies resolve from the plugin's own `node_modules`; only `effect` and `@opencode/plugin` are substituted.
-- TSX is compiled at runtime on the Bun CLI. The Node path has no transform, so ship compiled JS if you need Node.
+- Local directory plugins are compiled at runtime by Bun and receive OpenTUI's Solid transform. Published packages load from `node_modules`, where OpenTUI deliberately skips the Solid transform, so they must ship compiled ESM. Build with `@opentui/solid/bun-plugin` and keep `@opencode/plugin*`, `@opentui/*`, `solid-js`, and ordinary runtime dependencies external.
 - `opencode plugin add <package>` installs into the global npm plugin cache. If the package has a **server** entrypoint, it is written to global `opencode.json(c)`; if it is TUI-only, it is written to `cli.json`. A combined package therefore lands in `opencode.json`, and the TUI auto-loads it from the server inventory.
+
+`0.1.0` pointed its `exports` at `.ts`/`.tsx` sources and exposed this gap: the installed TUI half loaded as static JSX and never rendered the sidebar. `0.1.1` ships `dist/`, and `pack:check` asserts that the packed TUI entrypoint imports `@opentui/solid` and contains no `@jsxImportSource` pragma.
 
 ### 4.2 Discovery and options
 

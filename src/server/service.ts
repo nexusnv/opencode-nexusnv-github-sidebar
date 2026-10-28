@@ -11,6 +11,7 @@ import type {
   SummaryResponse,
 } from "../shared/types.js"
 import { emptyLaunchResult } from "../shared/types.js"
+import { VERSION } from "../shared/version.js"
 import type { AuthContext } from "./auth.js"
 import { invalidateAuthCache, resolveAuth, tokenFingerprint } from "./auth.js"
 import { SummaryCache } from "./cache.js"
@@ -26,7 +27,7 @@ import {
 import { LAUNCH_ISSUE_QUERY, LAUNCH_PULL_QUERY, SIDEBAR_QUERY } from "./query.js"
 import { detectRepo, type DetectedRepo } from "./repo.js"
 
-const USER_AGENT = "opencode-nexusnv-github-sidebar/0.1.0"
+const USER_AGENT = `opencode-nexusnv-github-sidebar/${VERSION}`
 
 export interface ServiceContext extends AuthContext, LaunchServerContext {
   readonly location: {
