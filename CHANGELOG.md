@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-10-29
+
+### Added
+
+- Full-list GitHub panel on `session.panel`, opened with `ctrl+shift+g` or the `▤` control in the sidebar header. It lists every row fetched under `fetchLimit`, shows true repository totals and `showing N of TOTAL`, and supports mine/all filters, `j`/`k` selection, `enter` launch, `o` browser, `r` refresh, `f` fullscreen, and `esc` close.
+- `summary({ full: true })`: the server caches one full snapshot and derives the bounded sidebar rows from it, so the panel and sidebar share one GraphQL request per cache TTL.
+- Sidebar section collapse now persists in TUI storage across restarts. `display.collapsed` seeds the first run only.
+
+### Changed
+
+- The sidebar refresh control keeps its position next to the new panel control.
+- README, AGENTS.md, and the research report document the panel keys, persistence semantics, and remaining P1 work.
+
 ## [0.1.2] - 2026-10-29
 
 ### Fixed
@@ -45,3 +58,4 @@ All notable changes to this project will be documented in this file.
 
 [0.1.2]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.2
 [0.1.0]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.0
+[0.2.0]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.2.0
