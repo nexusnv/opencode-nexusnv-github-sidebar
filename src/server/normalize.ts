@@ -182,7 +182,7 @@ export function normalizeIssue(
 }
 
 export type NormalizeSidebarResult =
-  | { readonly ok: true; readonly data: SummaryData; readonly isPrivate: boolean }
+  | { readonly ok: true; readonly data: SummaryData; readonly full: SummaryData; readonly isPrivate: boolean }
   | { readonly ok: false; readonly reason: "not-found" }
 
 export interface SelectRowsOptions {
@@ -199,6 +199,34 @@ export interface SelectedRows {
   readonly issues: readonly IssueView[]
 }
 
+export interface OrderedRows {
+  readonly pulls: readonly PullView[]
+  readonly issues: readonly IssueView[]
+}
+
+/**
+ * Viewer rows first, then everything else. The branch PR is always kept and
+ * deduped, even when it is not in the fetched top-N list.
+ */
+export function orderedRows(options: {
+  readonly pulls: readonly PullView[]
+  readonly issues: readonly IssueView[]
+  readonly branchPr: PullView | undefined
+}): OrderedRows {
+  const branchNumber = options.branchPr?.number
+  return {
+    pulls: [
+      ...(options.branchPr ? [options.branchPr] : []),
+      ...options.pulls.filter((pull) => pull.number !== branchNumber && pull.isMine),
+      ...options.pulls.filter((pull) => pull.number !== branchNumber && !pull.isMine),
+    ],
+    issues: [
+      ...options.issues.filter((issue) => issue.isMine),
+      ...options.issues.filter((issue) => !issue.isMine),
+    ],
+  }
+}
+
 /**
  * Apply scope and display limits. Viewer rows are never capped; the limits
  * only bound "other" rows. The branch PR is always kept, even when it is not
@@ -206,15 +234,7 @@ export interface SelectedRows {
  */
 export function selectRows(options: SelectRowsOptions): SelectedRows {
   const branchNumber = options.branchPr?.number
-  const orderedPulls = [
-    ...(options.branchPr ? [options.branchPr] : []),
-    ...options.pulls.filter((pull) => pull.number !== branchNumber && pull.isMine),
-    ...options.pulls.filter((pull) => pull.number !== branchNumber && !pull.isMine),
-  ]
-  const orderedIssues = [
-    ...options.issues.filter((issue) => issue.isMine),
-    ...options.issues.filter((issue) => !issue.isMine),
-  ]
+  const { pulls: orderedPulls, issues: orderedIssues } = orderedRows(options)
 
   const bounded =
     options.config.scope === "mine" ||
@@ -277,6 +297,7 @@ export function normalizeSidebar(input: unknown, repo: RepoRef, config: GithubSi
   const issuesTotal = safeCount(body.repository.issues?.totalCount) || issues.length
 
   const selected = selectRows({ pulls, issues, pullsTotal, issuesTotal, branchPr, config })
+  const ordered = orderedRows({ pulls, issues, branchPr })
 
   const rateLimitRaw = body.rateLimit
   const rateLimit: RateLimitView | undefined = rateLimitRaw
@@ -287,18 +308,27 @@ export function normalizeSidebar(input: unknown, repo: RepoRef, config: GithubSi
       }
     : undefined
 
+  const shared = {
+    viewer,
+    branch: "",
+    defaultBranch: sanitizeText(body.repository.defaultBranchRef?.name, 200),
+    ...(branchPr ? { branchPr } : {}),
+    totals: { pulls: pullsTotal, issues: issuesTotal },
+    ...(rateLimit ? { rateLimit } : {}),
+  }
+
   return {
     ok: true,
     isPrivate: body.repository.isPrivate === true,
     data: {
-      viewer,
-      branch: "",
-      defaultBranch: sanitizeText(body.repository.defaultBranchRef?.name, 200),
-      ...(branchPr ? { branchPr } : {}),
+      ...shared,
       pulls: selected.pulls,
       issues: selected.issues,
-      totals: { pulls: pullsTotal, issues: issuesTotal },
-      ...(rateLimit ? { rateLimit } : {}),
+    },
+    full: {
+      ...shared,
+      pulls: config.pulls.enabled ? ordered.pulls : [],
+      issues: config.issues.enabled ? ordered.issues : [],
     },
   }
 }

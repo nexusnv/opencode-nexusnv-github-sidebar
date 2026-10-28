@@ -43,7 +43,8 @@ export interface ServiceDeps {
 }
 
 interface CachedSummary {
-  readonly data: SummaryData
+  readonly selected: SummaryData
+  readonly full: SummaryData
   readonly isPrivate: boolean
 }
 
@@ -151,7 +152,7 @@ export class GithubSidebarService {
     })
   }
 
-  async summary(input: { readonly force: boolean }, signal: AbortSignal): Promise<SummaryResponse> {
+  async summary(input: { readonly force: boolean; readonly full?: boolean }, signal: AbortSignal): Promise<SummaryResponse> {
     if (this.parsed.errors.length > 0) {
       return summaryResponse({
         config: this.config,
@@ -225,7 +226,8 @@ export class GithubSidebarService {
           const normalized = normalizeSidebar(body, repository, this.config)
           if (!normalized.ok) throw new NotFoundError()
           return {
-            data: { ...normalized.data, branch },
+            selected: { ...normalized.data, branch },
+            full: { ...normalized.full, branch },
             isPrivate: normalized.isPrivate,
           }
         },
@@ -233,7 +235,7 @@ export class GithubSidebarService {
 
       const effectiveRepo: RepoRef = { ...repository, isPrivate: hit.value.isPrivate }
       this.lastSummary.set(this.repoKey(repo), {
-        data: hit.value.data,
+        data: hit.value.full,
         isPrivate: hit.value.isPrivate,
         fetchedAt: hit.fetchedAt,
       })
@@ -242,7 +244,7 @@ export class GithubSidebarService {
         status: hit.stale ? "stale" : "ready",
         message: hit.stale ? "Showing cached data" : "",
         repository: effectiveRepo,
-        data: hit.value.data,
+        data: input.full === true ? hit.value.full : hit.value.selected,
         fetchedAt: hit.fetchedAt,
       })
     } catch (error) {
