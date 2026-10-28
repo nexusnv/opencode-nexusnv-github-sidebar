@@ -26,6 +26,7 @@ import type {
 
 export interface SummaryInput {
   readonly force: boolean
+  readonly full: boolean
 }
 
 export interface LaunchInput {
@@ -35,9 +36,12 @@ export interface LaunchInput {
 
 export function parseSummaryInput(value: unknown): SummaryInput {
   if (!isRecord(value) || typeof value.force !== "boolean") {
-    throw new TypeError("summary input must be { force: boolean }")
+    throw new TypeError("summary input must be { force: boolean, full?: boolean }")
   }
-  return { force: value.force }
+  if (value.full !== undefined && typeof value.full !== "boolean") {
+    throw new TypeError("summary.full must be a boolean")
+  }
+  return { force: value.force, full: value.full === true }
 }
 
 export function parseLaunchInput(value: unknown): LaunchInput {

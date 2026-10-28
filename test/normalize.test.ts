@@ -142,6 +142,25 @@ function sidebarBody(overrides: Record<string, unknown> = {}) {
 }
 
 describe("normalizeSidebar", () => {
+  test("returns every fetched row in full while the sidebar stays bounded", () => {
+    const body = sidebarBody()
+    const pulls = Array.from({ length: 12 }, (_, index) =>
+      pull({ number: 100 + index, title: `Other ${index}`, author: { login: "other" } }),
+    )
+    body.repository.pullRequests.totalCount = 12
+    body.repository.pullRequests.nodes = pulls as typeof body.repository.pullRequests.nodes
+
+    const bounded = parseConfig({ scope: "auto", autoAllThreshold: 5, pulls: { limit: 3 } }).config
+    const result = normalizeSidebar(body, repo, bounded)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.pulls.length).toBeLessThan(result.full.pulls.length)
+    expect(result.full.pulls).toHaveLength(13)
+    expect(result.full.pulls[0]?.number).toBe(9)
+    expect(result.full.totals.pulls).toBe(12)
+  })
+
   test("returns totals, rate limit, and the repository privacy flag", () => {
     const result = normalizeSidebar(sidebarBody(), repo, config)
     expect(result.ok).toBe(true)

@@ -8,6 +8,7 @@ export interface GlyphSet {
   readonly refresh: string
   readonly busy: string
   readonly browser: string
+  readonly panel: string
   readonly down: string
   readonly right: string
   readonly rule: string
@@ -41,6 +42,7 @@ export function glyphSet(mode: Glyphs): GlyphSet {
       refresh: "r",
       busy: "...",
       browser: "b",
+      panel: "P",
       down: "v",
       right: ">",
       rule: "-",
@@ -54,6 +56,7 @@ export function glyphSet(mode: Glyphs): GlyphSet {
     refresh: "↻",
     busy: "…",
     browser: "↗",
+    panel: "▤",
     down: "▾",
     right: "▸",
     rule: "─",

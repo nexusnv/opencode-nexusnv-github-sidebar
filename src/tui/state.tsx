@@ -63,6 +63,21 @@ export interface SidebarState {
   readonly toggleSection: (section: SectionName) => void
 }
 
+export interface SidebarStateOptions {
+  /** Request every fetched row for the full-list panel instead of the bounded sidebar rows. */
+  readonly full?: boolean
+}
+
+interface SidebarPreferences {
+  initialized: boolean
+  collapsed: SectionName[]
+}
+
+function sanitizeSections(value: unknown): readonly SectionName[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is SectionName => entry === "pulls" || entry === "issues")
+}
+
 function sameDirectory(left: string | undefined, right: string | undefined): boolean {
   return Boolean(left && right && left === right)
 }
@@ -79,20 +94,22 @@ function messageOf(cause: unknown): string {
  * - summary fetch, force refresh, polling, and transport errors;
  * - branch/idle refresh triggers filtered to this location and root session;
  * - linked-session markers, which are advisory and never fail the sidebar;
- * - collapsed sections, kept in memory for the TUI session.
+ * - collapsed sections, persisted in TUI storage and seeded once from the view.
  */
-export function createSidebarState(context: Context): SidebarState {
+export function createSidebarState(context: Context, options: SidebarStateOptions = {}): SidebarState {
   const [gate, setGate] = createSignal<SidebarStatus>("loading")
   const [summary, setSummary] = createSignal<SummaryResponse>()
   const [requestError, setRequestError] = createSignal<string>()
   const [refreshing, setRefreshing] = createSignal(false)
   const [linked, setLinked] = createSignal<ReadonlySet<string>>(new Set<string>())
-  const [collapsed, setCollapsed] = createSignal<readonly SectionName[]>([])
+  const [preferences, updatePreferences] = context.storage.store<SidebarPreferences>("preferences", {
+    initial: { initialized: false, collapsed: [] },
+  })
+  const collapsed = () => sanitizeSections(preferences.collapsed)
 
   let summaryController: AbortController | undefined
   let linkedController: AbortController | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
-  let collapsedInitialized = false
 
   function clearTimer(): void {
     if (timer === undefined) return
@@ -126,9 +143,14 @@ export function createSidebarState(context: Context): SidebarState {
   function applySummary(next: SummaryResponse): void {
     setSummary(next)
     setRequestError(undefined)
-    if (!collapsedInitialized) {
-      setCollapsed(next.view.display.collapsed)
-      collapsedInitialized = true
+    if (!preferences.initialized) {
+      // The server's `display.collapsed` is only the first-run default. Once
+      // stored, the user's choice wins, including an explicitly expanded list.
+      void updatePreferences((draft) => {
+        if (draft.initialized) return
+        draft.initialized = true
+        draft.collapsed = [...next.view.display.collapsed]
+      }).catch(() => undefined)
     }
     schedule(next.view.refreshSeconds)
     void refreshLinked(next.repository)
@@ -144,7 +166,10 @@ export function createSidebarState(context: Context): SidebarState {
     try {
       const result = await context.client
         .rpc(GithubSidebarRpc)
-        .summary({ force }, { location: requireRpcLocation(context), signal: controller.signal })
+        .summary(
+          { force, full: options.full === true },
+          { location: requireRpcLocation(context), signal: controller.signal },
+        )
       if (controller.signal.aborted) return
       if (!isSummaryResponse(result)) throw new TypeError("The server returned an invalid summary response")
       applySummary(result)
@@ -168,8 +193,6 @@ export function createSidebarState(context: Context): SidebarState {
     setRequestError(undefined)
     setRefreshing(false)
     setLinked(new Set<string>())
-    setCollapsed([])
-    collapsedInitialized = false
   }
 
   createEffect(
@@ -227,9 +250,13 @@ export function createSidebarState(context: Context): SidebarState {
     collapsed,
     refresh: (force = false) => void refresh(force),
     toggleSection: (section) => {
-      const current = collapsed()
-      setCollapsed(current.includes(section) ? current.filter((entry) => entry !== section) : [...current, section])
-      collapsedInitialized = true
+      void updatePreferences((draft) => {
+        draft.initialized = true
+        const current = sanitizeSections(draft.collapsed)
+        draft.collapsed = current.includes(section)
+          ? current.filter((entry) => entry !== section)
+          : [...current, section]
+      }).catch(() => undefined)
     },
   }
 }

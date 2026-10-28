@@ -299,6 +299,7 @@ export const GithubSidebarRpc = Rpc.define({
         type: "object",
         properties: {
           force: { type: "boolean" },
+          full: { type: "boolean" },
         },
         required: ["force"],
         additionalProperties: false,

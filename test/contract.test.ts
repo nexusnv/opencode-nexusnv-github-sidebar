@@ -13,9 +13,11 @@ import { effectiveView, issueView, launchResult, pullView, repoRef, summaryData,
 
 describe("input parsers", () => {
   test("accepts a summary input with an explicit force flag", () => {
-    expect(parseSummaryInput({ force: true })).toEqual({ force: true })
+    expect(parseSummaryInput({ force: true })).toEqual({ force: true, full: false })
+    expect(parseSummaryInput({ force: false, full: true })).toEqual({ force: false, full: true })
     expect(() => parseSummaryInput({})).toThrow(TypeError)
     expect(() => parseSummaryInput({ force: "yes" })).toThrow(TypeError)
+    expect(() => parseSummaryInput({ force: true, full: "yes" })).toThrow(TypeError)
     expect(() => parseSummaryInput(null)).toThrow(TypeError)
     expect(() => parseSummaryInput([])).toThrow(TypeError)
   })

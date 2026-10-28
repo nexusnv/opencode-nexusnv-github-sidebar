@@ -8,7 +8,7 @@ A project-level GitHub workbench for OpenCode V2. It shows the current repositor
 
 ![The GitHub sidebar in an OpenCode session: repository header, branch and counts, pull requests with CI and merge detail, and issues](./docs/sidebar.png)
 
-> **Status: P0 (v0.1).** Repository detection, auth, one GraphQL snapshot, normalization, caching, the sidebar, and the worktree/session launch path are implemented. See [Current limitations](#current-limitations) for deliberately deferred P1/P2 work, and [v0.1.0 readiness](./docs/v0.1.0-readiness.md) for the real-host verification and release checklist.
+> **Status: P1 workbench (v0.2).** Repository detection, auth, one GraphQL snapshot, normalization, caching, the sidebar, the worktree/session launch path, the full-list session panel, and durable section collapse are implemented. See [Current limitations](#current-limitations) for the remaining P1/P2 work, and [v0.2.0 readiness](./docs/v0.2.0-readiness.md) for the real-host verification and release checklist.
 
 The verified design and OpenCode 2.1.4 API research live in [opencode-github-sidebar-plugin-research.md](https://github.com/nexusnv/opencode-nexusnv-github-sidebar/blob/main/opencode-github-sidebar-plugin-research.md).
 
@@ -16,6 +16,7 @@ The verified design and OpenCode 2.1.4 API research live in [opencode-github-sid
 
 - Detects the GitHub repository on the **server** where the OpenCode project lives. A non-git directory, missing remote, or unsupported host renders a compact status instead of failing the sidebar.
 - Shows a pinned current-branch PR, the viewer's open PRs and issues, and bounded/collapsible other rows so a large repository does not flood the sidebar.
+- Opens a full-list **GitHub panel** (`ctrl+shift+g`) with every fetched row, mine/all filters, keyboard navigation, and the same launch path as the sidebar.
 - Shows PR title, comment count, review count, CI status, merge status, draft state, and author.
 - Shows issue title, comment count, labels, author, and assignee.
 - Refreshes on a timer, on branch changes, after a root session goes idle, and when the refresh control is clicked.
@@ -35,9 +36,11 @@ The verified design and OpenCode 2.1.4 API research live in [opencode-github-sid
 │  ├─ repo header                  │        │ auth resolution                      │
 │  ├─ branch PR                    │        │ GraphQL client + cache               │
 │  ├─ viewer / other PRs           │ ◄───── │ normalization + sanitization         │
-│  ├─ viewer / other issues        │        │ git fetch + worktree creation        │
-│  └─ refresh / connect CTA        │        │ launch context query                 │
-│                                  │        │                                      │
+│  ├─ viewer / other issues        │        │ full snapshot + bounded selection    │
+│  └─ refresh / connect CTA        │        │ git fetch + worktree creation        │
+│                                  │        │ launch context query                 │
+│ session.panel                    │        │                                      │
+│  └─ full rows + keymap commands  │        │                                      │
 │ session create + synthetic       │        │                                      │
 │ context + tab focus              │        │                                      │
 └──────────────────────────────────┘        └──────────────────────────────────────┘
@@ -53,11 +56,11 @@ The RPC is **location-scoped**. Every call passes `{ location: requireRpcLocatio
 
 ### RPC surface
 
-| Method          | Purpose                                                                  |
-| --------------- | ------------------------------------------------------------------------ |
-| `health`        | Liveness/location gate. The sidebar only renders data after this passes. |
-| `summary`       | One normalized snapshot plus the server-owned effective view.            |
-| `prepareLaunch` | `git fetch`, worktree reuse/creation, branch setup, and launch context.  |
+| Method          | Purpose                                                                                               |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| `health`        | Liveness/location gate. The sidebar only renders data after this passes.                              |
+| `summary`       | One normalized snapshot plus the server-owned effective view; `full: true` returns every fetched row. |
+| `prepareLaunch` | `git fetch`, worktree reuse/creation, branch setup, and launch context.                               |
 
 `prepareLaunch` returns a discriminated envelope (`ok`, `code`, `message`, and on success the authoritative branch, base, worktree, directory, and context). Expected launch failures are typed results, not RPC transport errors, so the TUI can show a useful message without retrying.
 
@@ -183,7 +186,7 @@ Only client-local options belong in `cli.json`:
 | `scope`                   | `"auto"`                         | `auto`, `mine`, or `all` row selection.                              |
 | `autoAllThreshold`        | `30`                             | Above this many open items, `auto` limits rows to the viewer's work. |
 | `mine.issues`             | `"either"`                       | `assignee`, `author`, or `either` for issue ownership.               |
-| `fetchLimit`              | `50`                             | PR/issue nodes fetched per snapshot (one GraphQL point).             |
+| `fetchLimit`              | `50`                             | PR/issue nodes fetched per snapshot; also the panel's maximum rows.  |
 | `pulls.enabled`           | `true`                           | Show the pull-request section.                                       |
 | `pulls.limit`             | `8`                              | Maximum pull rows after selection.                                   |
 | `issues.enabled`          | `true`                           | Show the issue section.                                              |
@@ -209,7 +212,7 @@ Only client-local options belong in `cli.json`:
 | `display.header`          | `true`                           | Show the repository header.                                          |
 | `display.totals`          | `true`                           | Show counts in the header and section titles.                        |
 | `display.order`           | `["pulls", "issues"]`            | Section order.                                                       |
-| `display.collapsed`       | `[]`                             | Sections initially collapsed.                                        |
+| `display.collapsed`       | `[]`                             | Sections collapsed on first run; later choices live in TUI storage.  |
 | `display.glyphs`          | `"unicode"`                      | `unicode` or ASCII-safe `ascii`.                                     |
 | `display.showUnavailable` | `false`                          | Show the reason when the repository cannot be used.                  |
 | `debug`                   | `false`                          | Verbose diagnostics without tokens or private titles.                |
@@ -218,11 +221,31 @@ Only client-local options belong in `cli.json`:
 
 `openLinks`: `auto` (OSC 8 over SSH, platform opener otherwise), `browser` (always spawn), or `osc8` (always let the terminal handle the link).
 
+## Session panel
+
+![The full-list GitHub panel: repository header with mine/all filters, pull requests with CI and merge detail, issues, and the keyboard help line](./docs/panel.png)
+
+`ctrl+shift+g` (or the `▤` control in the sidebar header) opens the full-list panel for the current session. The panel shows every row fetched under `fetchLimit`, not just the sidebar's `pulls.limit` / `issues.limit`.
+
+| Key     | Action                                                             |
+| ------- | ------------------------------------------------------------------ |
+| `j`/`↓` | Select the next row.                                               |
+| `k`/`↑` | Select the previous row.                                           |
+| `enter` | Launch the selected PR/issue (or open the browser when read-only). |
+| `o`     | Open the selected item on GitHub.                                  |
+| `r`     | Refresh the snapshot.                                              |
+| `m`     | Show only the viewer's items (plus the current-branch PR).         |
+| `a`     | Show every fetched item.                                           |
+| `f`     | Toggle docked/fullscreen presentation.                             |
+| `esc`   | Close the panel.                                                   |
+
+The panel reuses the cached snapshot; opening it does not make a second GraphQL request. Section headers keep the true repository totals, and a `showing N of TOTAL` line appears when the fetched rows do not cover the whole repository. `ctrl+shift+g` toggles the panel from the current session and explains when no session panel is available.
+
 ## Sidebar behavior
 
 - **Markers:** `◆` current-branch PR, `●` linked root session, `+` unlinked. Markers are hidden in read-only mode.
 - **Rows:** title and canonical URL are sanitized on the server and again validated before opening in the TUI.
-- **Sections:** click a section title to collapse or expand it; the state is in memory for the TUI session.
+- **Sections:** click a section title to collapse or expand it; the choice is stored in TUI storage and survives restarts. `display.collapsed` only seeds the first run.
 - **States:** loading, ready, stale, disabled, no git, no remote, unsupported host, no auth, unauthorized, not found, rate limited, network, and generic error.
 - **Auth:** the status line explains `/connect`; the token itself never crosses the RPC.
 - **Child sessions:** the sidebar renders nothing and performs no fetch.
@@ -289,7 +312,7 @@ The test preload (`test/preload.ts`, wired through `bunfig.toml`) registers `@op
 ├── rpc.ts                   # local-directory RPC entry
 ├── src/
 │   ├── index.ts             # server plugin setup + RPC registration
-│   ├── tui.tsx              # TUI plugin setup + sidebar slot
+│   ├── tui.tsx              # TUI plugin setup + sidebar/panel/app slots
 │   ├── rpc.ts               # location-scoped JSON Schema contract
 │   ├── config.ts            # option parsing, defaults, effective view
 │   ├── server/
@@ -313,6 +336,8 @@ The test preload (`test/preload.ts`, wired through `bunfig.toml`) registers `@op
 │   └── tui/
 │       ├── state.tsx        # health gate, polling, events, markers
 │       ├── sidebar.tsx      # header, sections, rows, states
+│       ├── panel.tsx        # full-list session panel + keymap commands
+│       ├── status-line.tsx  # shared auth/network/rate-limit line
 │       ├── row.tsx          # row and browser controls
 │       ├── launch.ts        # linked-session lookup + launch sequence
 │       ├── format.ts        # glyphs, markers, labels
@@ -324,9 +349,10 @@ The test preload (`test/preload.ts`, wired through `bunfig.toml`) registers `@op
 
 ## Current limitations
 
-P0 deliberately stops here:
+P1 deliberately stops here:
 
-- No panel, no OAuth device flow, no persistent server cache.
+- The panel shows at most `fetchLimit` rows per section and has no search, cursor pagination, or review-requested filter.
+- No OAuth device flow, no persistent server cache.
 - No interactive PR writes, review submission, or merge actions.
 - No session-PR adoption, PR selection from existing sessions, or multiple linked sessions per item (the newest root session wins).
 - No GitLab or Bitbucket support.

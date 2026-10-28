@@ -100,7 +100,7 @@ describe("server plugin setup", () => {
 })
 
 describe("TUI plugin setup", () => {
-  test("appends an additive sidebar claim", () => {
+  test("appends additive sidebar, panel, and command claims", () => {
     const claims: Array<{ append?: string; replace?: string; render: unknown }> = []
     const context = {
       ui: {
@@ -113,10 +113,12 @@ describe("TUI plugin setup", () => {
 
     tui.setup(context)
 
-    expect(claims).toHaveLength(1)
-    expect(claims[0]?.append).toBe("sidebar.content")
-    expect(claims[0]?.replace).toBeUndefined()
-    expect(claims[0]?.render).toBeFunction()
+    expect(claims).toHaveLength(3)
+    expect(claims.map((claim) => claim.append)).toEqual(["sidebar.content", "session.panel", "app"])
+    for (const claim of claims) {
+      expect(claim.replace).toBeUndefined()
+      expect(claim.render).toBeFunction()
+    }
   })
 
   test("uses the canonical identifier", () => {

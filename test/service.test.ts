@@ -150,6 +150,40 @@ describe("GithubSidebarService.summary", () => {
     expect(calls).toBe(3)
   })
 
+  test("serves full rows from the same cached snapshot", async () => {
+    const directory = await tempRepo("git@github.com:acme/widgets.git")
+    let calls = 0
+    const nodes = Array.from({ length: 6 }, (_, index) => ({
+      ...pullNode,
+      number: 100 + index,
+      title: `Pull ${index}`,
+      author: { login: "other" },
+    }))
+    const body = summaryBody()
+    body.repository.pullRequests.totalCount = 6
+    body.repository.pullRequests.nodes = nodes
+
+    const service = new GithubSidebarService(
+      context(directory),
+      parseConfig({ token: "secret-token", scope: "auto", autoAllThreshold: 1, pulls: { limit: 2 } }),
+      {
+        fetchImpl: async () => {
+          calls++
+          return jsonResponse({ data: body })
+        },
+      },
+    )
+    const signal = new AbortController().signal
+
+    const bounded = await service.summary({ force: false }, signal)
+    const full = await service.summary({ force: false, full: true }, signal)
+
+    expect(calls).toBe(1)
+    expect(bounded.data?.pulls).toHaveLength(2)
+    expect(full.data?.pulls).toHaveLength(6)
+    expect(full.data?.totals.pulls).toBe(6)
+  })
+
   test("serves stale data when a refresh fails inside staleSeconds", async () => {
     const directory = await tempRepo("git@github.com:acme/widgets.git")
     const time = { value: 1_000_000, now: () => time.value }

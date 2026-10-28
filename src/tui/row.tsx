@@ -42,12 +42,16 @@ export function BrowserAction(props: {
 export function Row(props: {
   readonly context: Context
   readonly onActivate: () => void
+  readonly id?: string | undefined
+  readonly selected?: boolean | undefined
   readonly children: JSX.Element
 }) {
   return (
     <box
+      {...(props.id ? { id: props.id } : {})}
       flexDirection="column"
       minWidth={0}
+      backgroundColor={props.selected ? props.context.theme.background.raised.high : "transparent"}
       onMouseUp={(event: MouseLike) => {
         if (event.button !== 0) return
         props.onActivate()
@@ -67,6 +71,8 @@ export function PullRow(props: {
   readonly glyphs: GlyphSet
   readonly mode: OpenLinks
   readonly marker: string
+  readonly id?: string | undefined
+  readonly selected?: boolean | undefined
   readonly onActivate: () => void
 }) {
   const theme = props.context.theme
@@ -78,7 +84,7 @@ export function PullRow(props: {
   }
 
   return (
-    <Row context={props.context} onActivate={props.onActivate}>
+    <Row context={props.context} onActivate={props.onActivate} id={props.id} selected={props.selected}>
       <box flexDirection="row" minWidth={0}>
         <text flexShrink={0} fg={color()}>
           {props.marker}{" "}
@@ -105,6 +111,8 @@ export function IssueRow(props: {
   readonly glyphs: GlyphSet
   readonly mode: OpenLinks
   readonly marker: string
+  readonly id?: string | undefined
+  readonly selected?: boolean | undefined
   readonly onActivate: () => void
 }) {
   const theme = props.context.theme
@@ -114,7 +122,7 @@ export function IssueRow(props: {
   }
 
   return (
-    <Row context={props.context} onActivate={props.onActivate}>
+    <Row context={props.context} onActivate={props.onActivate} id={props.id} selected={props.selected}>
       <box flexDirection="row" minWidth={0}>
         <text flexShrink={0} fg={color()}>
           {props.marker}{" "}
