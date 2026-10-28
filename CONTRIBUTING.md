@@ -40,6 +40,10 @@ Read [AGENTS.md](./AGENTS.md) and §7, §12.8, §14, and §18 of the research re
 
 Never commit tokens, `.env` files, or captured private repository data. Report vulnerabilities privately as described in [SECURITY.md](./SECURITY.md).
 
+## Releasing
+
+Follow [Releasing](./docs/v0.1.0-readiness.md#releasing). Releases are published from a `v*` tag by `.github/workflows/publish.yml`, never from a local working tree. The workflow requires the `NPM_TOKEN` repository secret until npm trusted publishing is configured.
+
 ## Commits
 
 Use a clear imperative subject. Keep the research document and implementation changes in separate commits when practical.
