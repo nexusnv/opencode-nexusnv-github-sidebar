@@ -236,6 +236,19 @@ describe("Sidebar states", () => {
     }
   })
 
+  test("opens the full-list panel from the header", async () => {
+    const fake = fakeTui({ summary: async () => summaryResponse() })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitForFrame((frame) => frame.includes("acme/widgets"))
+      await app.mockMouse.click(38, 0)
+      await app.waitFor(() => fake.calls.panelOpen.length === 1)
+      expect(fake.calls.panelOpen[0]).toEqual({ name: "github", options: undefined })
+    } finally {
+      await app.dispose()
+    }
+  })
+
   test("forces a refresh when the refresh control is clicked", async () => {
     const fake = fakeTui({ summary: async () => summaryResponse() })
     const app = await renderSidebar(fake)

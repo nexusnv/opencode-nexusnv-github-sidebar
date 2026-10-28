@@ -64,7 +64,10 @@ export interface FakeTuiOptions {
   readonly navigate?: (input: unknown) => void
   readonly sessions?: ReadonlyMap<string, SessionInfo>
   /** Current router destination; defaults to the `ses-root` session. */
-  readonly route?: { readonly type: "session"; readonly sessionID: string } | { readonly type: "home" }
+  readonly route?:
+    | { readonly type: "session"; readonly sessionID: string }
+    | { readonly type: "home" }
+    | (() => { readonly type: "session"; readonly sessionID: string } | { readonly type: "home" })
 }
 
 export interface FakeTui {
@@ -256,6 +259,14 @@ export function fakeTheme() {
         info: { base: color },
       },
     },
+    background: {
+      base: color,
+      raised: { base: color, high: color, max: color },
+      action: { primary: { base: color } },
+      formfield: { base: color },
+      feedback: { error: { base: color } },
+    },
+    border: { base: color },
   }
 }
 
@@ -294,7 +305,10 @@ export function fakeTui(options: FakeTuiOptions = {}): FakeTui {
   const stores = new Map<string, FakeStoreEntry>()
   const layers = new Set<() => KeymapLayer>()
   const [panel, setPanel] = createSignal<{ readonly name: string; readonly sessionID: string }>()
-  const route = () => options.route ?? { type: "session" as const, sessionID: "ses-root" }
+  const route = () => {
+    const value = typeof options.route === "function" ? options.route() : options.route
+    return value ?? { type: "session" as const, sessionID: "ses-root" }
+  }
 
   const storage = {
     store<Value extends object>(key: string, storeOptions: { readonly initial: Value }) {
