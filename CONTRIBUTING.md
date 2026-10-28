@@ -16,7 +16,7 @@ bun run audit
 bun run pack:check
 ```
 
-`bun run check` runs formatting, lint, strict typecheck, and tests. `bun run audit` fails on high/critical dependency advisories. `pack:check` verifies that every `exports` target and local-directory shim is present in the packed tarball.
+`bun run check` runs formatting, lint, strict typecheck, and tests. `bun run audit` fails on high/critical dependency advisories. `pack:check` builds `dist/`, verifies that every `exports` target and local-directory shim is present in the packed tarball, and rejects an uncompiled TUI entrypoint.
 
 ## Scope
 

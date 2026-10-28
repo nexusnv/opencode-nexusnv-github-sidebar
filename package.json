@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode-nexusnv-github-sidebar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Project-level GitHub workbench for OpenCode V2: pull requests, issues, and worktree-backed sessions in the sidebar.",
   "type": "module",
   "license": "MIT",
@@ -36,11 +36,12 @@
     "seroval-plugins": "1.6.3"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./tui": "./src/tui.tsx",
-    "./rpc": "./src/rpc.ts"
+    ".": "./dist/index.js",
+    "./tui": "./dist/tui.js",
+    "./rpc": "./dist/rpc.js"
   },
   "files": [
+    "dist/",
     "index.ts",
     "tui.tsx",
     "rpc.ts",
@@ -50,16 +51,18 @@
     "CHANGELOG.md"
   ],
   "scripts": {
+    "build": "bun run scripts/build.ts",
+    "prepack": "bun run build",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test scripts index.ts tui.tsx rpc.ts",
     "lint:fix": "oxlint --fix src test scripts index.ts tui.tsx rpc.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "bun test",
+    "test": "bun run build && bun test",
     "test:watch": "bun test --watch",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test",
     "audit": "bun run scripts/audit.ts",
-    "pack:check": "bun run scripts/assert-pack.ts",
+    "pack:check": "bun run build && bun run scripts/assert-pack.ts",
     "smoke:live": "bun run scripts/live-smoke.ts"
   },
   "dependencies": {

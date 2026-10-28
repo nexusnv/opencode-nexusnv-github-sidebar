@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-10-29
+
+### Fixed
+
+- Publish compiled ESM from `dist/` instead of `.ts`/`.tsx` sources. OpenCode applies its Solid transform to local sources but skips `node_modules`, so the `0.1.0` TUI half loaded as static JSX and never rendered the sidebar. Local-directory installs were unaffected. `pack:check` now asserts that the packed TUI entrypoint imports the host `@opentui/solid` runtime and contains no uncompiled JSX pragma.
+- Derive the GitHub `User-Agent` from the package version instead of a hard-coded `0.1.0`.
+
+`0.1.0` is deprecated on npm because its TUI entrypoint cannot run; use `0.1.1`.
+
 ## [0.1.0] - 2026-10-29
 
 ### Added
@@ -32,4 +41,5 @@ All notable changes to this project will be documented in this file.
 
 - TUI lifecycle state now lives in `src/tui/state.tsx`. OpenCode 2.2.0 rewrites `solid-js` to the host runtime for `.tsx` sources only; the previous `.ts` module loaded the plugin's own Solid server build, so effects never tracked the host's location and the sidebar stayed on "Loading GitHub…". `test/tui-runtime.test.ts` blocks runtime host imports from `.ts` sources.
 
+[0.1.1]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.1
 [0.1.0]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.0
