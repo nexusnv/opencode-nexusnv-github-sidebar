@@ -42,7 +42,7 @@ Never commit tokens, `.env` files, or captured private repository data. Report v
 
 ## Releasing
 
-Follow [Releasing](./docs/v0.1.0-readiness.md#releasing). Releases are published from a `v*` tag by `.github/workflows/publish.yml`, never from a local working tree. The workflow requires the `NPM_TOKEN` repository secret until npm trusted publishing is configured.
+Follow [Releasing](./docs/v0.1.0-readiness.md#releasing). Releases are published from a `v*` tag by `.github/workflows/publish.yml`, never from a local working tree. The workflow uses the `NPM_TOKEN` repository secret while it exists and falls back to GitHub OIDC trusted publishing when it is absent. Configure the trusted publisher in the npm web UI first (npm requires an interactive 2FA session), then delete the secret.
 
 ## Commits
 
