@@ -152,7 +152,10 @@ export class GithubSidebarService {
     })
   }
 
-  async summary(input: { readonly force: boolean; readonly full?: boolean }, signal: AbortSignal): Promise<SummaryResponse> {
+  async summary(
+    input: { readonly force: boolean; readonly full?: boolean },
+    signal: AbortSignal,
+  ): Promise<SummaryResponse> {
     if (this.parsed.errors.length > 0) {
       return summaryResponse({
         config: this.config,

@@ -220,10 +220,7 @@ export function orderedRows(options: {
       ...options.pulls.filter((pull) => pull.number !== branchNumber && pull.isMine),
       ...options.pulls.filter((pull) => pull.number !== branchNumber && !pull.isMine),
     ],
-    issues: [
-      ...options.issues.filter((issue) => issue.isMine),
-      ...options.issues.filter((issue) => !issue.isMine),
-    ],
+    issues: [...options.issues.filter((issue) => issue.isMine), ...options.issues.filter((issue) => !issue.isMine)],
   }
 }
 

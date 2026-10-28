@@ -1,6 +1,7 @@
 import type { SessionInfo } from "@opencode/client"
-import type { Context } from "@opencode/plugin/tui/context"
+import type { Context, KeymapCommand, KeymapLayer } from "@opencode/plugin/tui/context"
 import { createSignal } from "solid-js"
+import { createStore, produce } from "solid-js/store"
 import { SERVER_PLUGIN_ID } from "../../src/shared/ids"
 import type {
   EffectiveView,
@@ -42,6 +43,8 @@ export interface FakeCalls {
   readonly toasts: unknown[]
   readonly focused: string[]
   readonly navigated: unknown[]
+  readonly panelOpen: Array<{ name: string; options: unknown }>
+  readonly panelClose: unknown[]
 }
 
 export interface FakeTuiOptions {
@@ -60,11 +63,17 @@ export interface FakeTuiOptions {
   readonly focusTab?: (sessionID: string) => boolean
   readonly navigate?: (input: unknown) => void
   readonly sessions?: ReadonlyMap<string, SessionInfo>
+  /** Current router destination; defaults to the `ses-root` session. */
+  readonly route?: { readonly type: "session"; readonly sessionID: string } | { readonly type: "home" }
 }
 
 export interface FakeTui {
   readonly context: Context
   readonly calls: FakeCalls
+  /** Raw reactive stores keyed by `context.storage.store` key. */
+  readonly storage: ReadonlyMap<string, unknown>
+  /** Evaluates every registered keymap layer and returns the reachable commands. */
+  readonly keymapCommands: () => readonly KeymapCommand[]
   readonly emit: (type: string, event: unknown) => void
   readonly setLocation: (next: { readonly directory: string } | undefined) => void
 }
@@ -272,10 +281,39 @@ export function fakeTui(options: FakeTuiOptions = {}): FakeTui {
     toasts: [],
     focused: [],
     navigated: [],
+    panelOpen: [],
+    panelClose: [],
   }
 
   const listeners = new Map<string, Set<(event: unknown) => void>>()
   const sessions = options.sessions ?? new Map<string, SessionInfo>()
+  interface FakeStoreEntry {
+    readonly value: object
+    readonly update: (mutation: (draft: object) => void) => Promise<void>
+  }
+  const stores = new Map<string, FakeStoreEntry>()
+  const layers = new Set<() => KeymapLayer>()
+  const [panel, setPanel] = createSignal<{ readonly name: string; readonly sessionID: string }>()
+  const route = () => options.route ?? { type: "session" as const, sessionID: "ses-root" }
+
+  const storage = {
+    store<Value extends object>(key: string, storeOptions: { readonly initial: Value }) {
+      const existing = stores.get(key)
+      if (existing) return [existing.value, existing.update] as const
+      const [value, setValue] = createStore<Value>(structuredClone(storeOptions.initial))
+      const update = async (mutation: (draft: Value) => void) => {
+        setValue(produce(mutation))
+      }
+      stores.set(key, { value, update: update as FakeStoreEntry["update"] })
+      return [value, update] as const
+    },
+    memory<Value>(key: string, memoryOptions: { readonly initial: Value }) {
+      const existing = stores.get(key)
+      if (existing) return [existing.value, () => undefined] as const
+      stores.set(key, { value: memoryOptions.initial as object, update: async () => undefined })
+      return [memoryOptions.initial, () => undefined] as const
+    },
+  }
 
   const getLocation =
     options.getLocation ??
@@ -363,6 +401,18 @@ export function fakeTui(options: FakeTuiOptions = {}): FakeTui {
       },
     },
     theme: fakeTheme(),
+    storage,
+    keymap: {
+      layer: (factory: () => KeymapLayer) => {
+        layers.add(factory)
+      },
+      dispatch: () => undefined,
+      shortcuts: () => [],
+      commands: () => keymapCommands(),
+      pending: () => [],
+      active: () => [],
+      mode: { current: () => "base", push: () => () => undefined },
+    },
     ui: {
       dialog: {
         alert: async (input: unknown) => {
@@ -391,13 +441,39 @@ export function fakeTui(options: FakeTuiOptions = {}): FakeTui {
           calls.navigated.push(input)
           options.navigate?.(input)
         },
+        current: () => route(),
+      },
+      panel: {
+        open: (name: string, panelOptions?: unknown) => {
+          calls.panelOpen.push({ name, options: panelOptions })
+          const current = route()
+          if (current.type !== "session") return false
+          setPanel({ name, sessionID: current.sessionID })
+          return true
+        },
+        close: () => {
+          calls.panelClose.push(true)
+          setPanel(undefined)
+        },
+        current: () => panel(),
       },
     },
   } as unknown as Context
 
+  const keymapCommands = (): readonly KeymapCommand[] =>
+    [...layers].flatMap((factory) => {
+      const layer = factory()
+      const enabled = typeof layer.enabled === "function" ? layer.enabled() : layer.enabled !== false
+      return enabled ? (layer.commands ?? []) : []
+    })
+
   return {
     context,
     calls,
+    get storage() {
+      return new Map([...stores].map(([key, entry]) => [key, entry.value] as const))
+    },
+    keymapCommands,
     emit: (type, event) => {
       for (const handler of listeners.get(type) ?? []) handler(event)
     },

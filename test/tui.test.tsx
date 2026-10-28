@@ -206,6 +206,36 @@ describe("Sidebar states", () => {
     }
   })
 
+  test("persists section collapse across mounts and ignores later config defaults", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse({ view: effectiveView({ display: { collapsed: ["issues"] } }) }),
+    })
+
+    const first = await renderSidebar(fake)
+    try {
+      await first.waitForFrame((frame) => frame.includes("▸ Issues (1)"))
+      await first.mockMouse.click(4, 3)
+      await first.waitForFrame((frame) => frame.includes("▸ Pull requests (1)"))
+    } finally {
+      await first.dispose()
+    }
+
+    const preferences = () => fake.storage.get("preferences") as { initialized?: boolean; collapsed?: string[] }
+    expect(preferences().initialized).toBe(true)
+    expect(preferences().collapsed).toEqual(["issues", "pulls"])
+
+    // A second mount must read storage, not reseed from `display.collapsed`.
+    const second = await renderSidebar(fake)
+    try {
+      const frame = await second.waitForFrame((value) => value.includes("Pull requests (1)"))
+      expect(frame).toContain("▸ Pull requests (1)")
+      expect(frame).toContain("▸ Issues (1)")
+      expect(frame).not.toContain("#7 Fix the widget")
+    } finally {
+      await second.dispose()
+    }
+  })
+
   test("forces a refresh when the refresh control is clicked", async () => {
     const fake = fakeTui({ summary: async () => summaryResponse() })
     const app = await renderSidebar(fake)
@@ -213,8 +243,8 @@ describe("Sidebar states", () => {
       await app.waitForFrame((frame) => frame.includes("acme/widgets"))
       await app.mockMouse.click(39, 0)
       await app.waitFor(() => fake.calls.summary.length === 2)
-      expect(fake.calls.summary[0]?.input).toEqual({ force: false })
-      expect(fake.calls.summary[1]?.input).toEqual({ force: true })
+      expect(fake.calls.summary[0]?.input).toEqual({ force: false, full: false })
+      expect(fake.calls.summary[1]?.input).toEqual({ force: true, full: false })
     } finally {
       await app.dispose()
     }
