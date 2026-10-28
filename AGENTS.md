@@ -37,7 +37,7 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 ## Architecture rules
 
 - **Server plugin** (`src/index.ts`): repo detection, auth resolution, GitHub GraphQL, normalization, cache, `git fetch`, worktree creation, launch context.
-- **TUI plugin** (`src/tui.tsx`, `src/tui/`): `sidebar.content`, rows, sections, browser action, session creation, synthetic context, tab focus. Lifecycle state lives in `src/tui/state.ts`; the UI is split across `sidebar.tsx`, `row.tsx`, `format.ts`, `open.ts`, and `launch.ts`.
+- **TUI plugin** (`src/tui.tsx`, `src/tui/`): `sidebar.content`, rows, sections, browser action, session creation, synthetic context, tab focus. Lifecycle state lives in `src/tui/state.tsx`; the UI is split across `sidebar.tsx`, `row.tsx`, `format.ts`, `open.ts`, and `launch.ts`.
 - **Shared RPC** (`src/rpc.ts`): location-scoped contract. Every call passes `{ location: requireRpcLocation(context) }`.
 - **Local-directory shims** (`index.ts`, `tui.tsx`, `rpc.ts`): thin re-exports. Directory targets probe `<dir>/server` then `<dir>/index`, then `tui` and `rpc`; package targets use `exports`.
 - Do not move credential resolution, git operations, or worktree creation into the TUI. A remote server would break, and the TUI client is not sandboxed.
@@ -75,6 +75,7 @@ Use Bun, not npm, for this repository. The lockfile is `bun.lock` and must be co
 - Tests use `bun:test`. TUI render tests use `testRender` from `@opentui/solid`; shared fake contexts and fixtures live in `test/helpers/tui.ts`.
 - The TUI validator layer (`src/shared/contract.ts`) must reject malformed RPC payloads rather than asserting shapes; every external URL is revalidated with `safeExternalUrl` before opening.
 - Keep `test/preload.ts` registered through `bunfig.toml`'s `[test] preload`. It installs the same OpenTUI Solid transform/runtime the host uses; without it, JSX is static and effects are no-ops under Bun's default Solid server build.
+- Solid runtime imports in TUI code must live in `.tsx` modules. OpenCode 2.2.0 rewrites `solid-js` to the host runtime for `.tsx` sources only; a `.ts` module resolves the plugin's own `solid-js` server build and silently stops tracking host signals. This is why `src/tui/state.tsx` uses the `.tsx` extension without JSX. `test/tui-runtime.test.ts` enforces the rule.
 - `test/host.test.ts` must keep loading all three entrypoints through `@opencode/plugin/host`; a broken default export must fail CI.
 - Negative type tests live under `test/types/`. Keep the no-`.api`, no-`location.project`, and unknown-theme-token guards.
 - `@opencode/theme` is a devDependency so `context.theme` is fully typed. Do not remove it.

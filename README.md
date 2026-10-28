@@ -5,7 +5,7 @@
 
 A project-level GitHub workbench for OpenCode V2. It shows the current repository's open pull requests and issues in the sidebar, prioritizes the viewer's work, and turns a row into a worktree-backed OpenCode session with the GitHub context already attached.
 
-> **Status: P0 (v0.1).** Repository detection, auth, one GraphQL snapshot, normalization, caching, the sidebar, and the worktree/session launch path are implemented. See [Current limitations](#current-limitations) for deliberately deferred P1/P2 work.
+> **Status: P0 (v0.1).** Repository detection, auth, one GraphQL snapshot, normalization, caching, the sidebar, and the worktree/session launch path are implemented. See [Current limitations](#current-limitations) for deliberately deferred P1/P2 work, and [v0.1.0 readiness](./docs/v0.1.0-readiness.md) for the real-host verification and release checklist.
 
 The verified design and OpenCode 2.1.4 API research live in [opencode-github-sidebar-plugin-research.md](https://github.com/nexusnv/opencode-nexusnv-github-sidebar/blob/main/opencode-github-sidebar-plugin-research.md).
 
@@ -70,7 +70,7 @@ With `actions.enabled: false` the sidebar is a true read-only dashboard: a prima
 
 ## Requirements
 
-- OpenCode `v2.1.4` with the Bun runtime.
+- OpenCode `v2.1.4` or newer with the Bun runtime. The P0 flow is verified end-to-end on `v2.2.0`; the package types are pinned to `2.1.4`.
 - Bun `1.4.x` for development.
 - `git` on the server host.
 - A GitHub token through one of:
@@ -288,7 +288,7 @@ The test preload (`test/preload.ts`, wired through `bunfig.toml`) registers `@op
 │   │   ├── ids.ts           # plugin/RPC identifiers
 │   │   └── location.ts      # required-location guard
 │   └── tui/
-│       ├── state.ts         # health gate, polling, events, markers
+│       ├── state.tsx        # health gate, polling, events, markers
 │       ├── sidebar.tsx      # header, sections, rows, states
 │       ├── row.tsx          # row and browser controls
 │       ├── launch.ts        # linked-session lookup + launch sequence
