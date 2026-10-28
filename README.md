@@ -6,7 +6,7 @@
 
 A project-level GitHub workbench for OpenCode V2. It shows the current repository's open pull requests and issues in the sidebar, prioritizes the viewer's work, and turns a row into a worktree-backed OpenCode session with the GitHub context already attached.
 
-![The GitHub sidebar in an OpenCode session: repository header, branch and counts, pull requests with CI and merge detail, and issues](./docs/sidebar.png)
+![The GitHub sidebar in an OpenCode session: repository header, branch and counts, pull requests with CI and merge detail, and issues](https://raw.githubusercontent.com/nexusnv/opencode-nexusnv-github-sidebar/main/docs/sidebar.png)
 
 > **Status: P1 workbench (v0.2).** Repository detection, auth, one GraphQL snapshot, normalization, caching, the sidebar, the worktree/session launch path, the full-list session panel, and durable section collapse are implemented. See [Current limitations](#current-limitations) for the remaining P1/P2 work, and [v0.2.0 readiness](./docs/v0.2.0-readiness.md) for the real-host verification and release checklist.
 
@@ -223,7 +223,7 @@ Only client-local options belong in `cli.json`:
 
 ## Session panel
 
-![The full-list GitHub panel: repository header with mine/all filters, pull requests with CI and merge detail, issues, and the keyboard help line](./docs/panel.png)
+![The full-list GitHub panel: repository header with mine/all filters, pull requests with CI and merge detail, issues, and the keyboard help line](https://raw.githubusercontent.com/nexusnv/opencode-nexusnv-github-sidebar/main/docs/panel.png)
 
 `ctrl+shift+g` (or the `▤` control in the sidebar header) opens the full-list panel for the current session. The panel shows every row fetched under `fetchLimit`, not just the sidebar's `pulls.limit` / `issues.limit`.
 
