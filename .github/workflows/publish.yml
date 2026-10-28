@@ -67,9 +67,14 @@ jobs:
           # Once the trusted publisher is configured in the npm web UI, delete the
           # NPM_TOKEN secret. This step then writes nothing and npm exchanges the
           # workflow's GitHub OIDC token for a short-lived publish credential.
+          # setup-node only creates NPM_CONFIG_USERCONFIG when registry-url is set;
+          # do not depend on that. Fall back to the user's .npmrc and export the
+          # path so the publish step sees the same file.
+          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
           if [ -n "$NODE_AUTH_TOKEN" ]; then
             echo "::warning::Publishing with the NPM_TOKEN secret. Configure the npm trusted publisher and delete the secret to use OIDC."
-            printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" >> "$NPM_CONFIG_USERCONFIG"
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" >> "$npmrc"
+            echo "NPM_CONFIG_USERCONFIG=$npmrc" >> "$GITHUB_ENV"
           fi
       - name: Publish to npm
         env:
