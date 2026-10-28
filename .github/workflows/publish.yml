@@ -92,10 +92,10 @@ jobs:
             gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
           fi
       - name: Deprecate the broken 0.1.0 release
-        if: steps.release.outputs.version == '0.1.1'
+        if: steps.release.outputs.version == '0.1.2'
         continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm deprecate "opencode-nexusnv-github-sidebar@0.1.0" \
-            "Broken packaging: the TUI entrypoint cannot run. Use 0.1.1."
+            "Broken packaging: the TUI entrypoint cannot run. Use 0.1.2."

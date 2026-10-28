@@ -159,7 +159,7 @@ A package can expose three entrypoints:
 - Local directory plugins are compiled at runtime by Bun and receive OpenTUI's Solid transform. Published packages load from `node_modules`, where OpenTUI deliberately skips the Solid transform, so they must ship compiled ESM. Build with `@opentui/solid/bun-plugin` and keep `@opencode/plugin*`, `@opentui/*`, `solid-js`, and ordinary runtime dependencies external.
 - `opencode plugin add <package>` installs into the global npm plugin cache. If the package has a **server** entrypoint, it is written to global `opencode.json(c)`; if it is TUI-only, it is written to `cli.json`. A combined package therefore lands in `opencode.json`, and the TUI auto-loads it from the server inventory.
 
-`0.1.0` pointed its `exports` at `.ts`/`.tsx` sources and exposed this gap: the installed TUI half loaded as static JSX and never rendered the sidebar. `0.1.1` ships `dist/`, and `pack:check` asserts that the packed TUI entrypoint imports `@opentui/solid` and contains no `@jsxImportSource` pragma.
+`0.1.0` pointed its `exports` at `.ts`/`.tsx` sources and exposed this gap: the installed TUI half loaded as static JSX and never rendered the sidebar. `0.1.2` ships `dist/`, and `pack:check` asserts that the packed TUI entrypoint imports `@opentui/solid` and contains no `@jsxImportSource` pragma. (`0.1.1` was tagged but never published because npm rejected its provenance entry with `TLOG_CREATE_ENTRY_ERROR`.)
 
 ### 4.2 Discovery and options
 
