@@ -78,17 +78,21 @@ With `actions.enabled: false` the sidebar is a true read-only dashboard: a prima
   - `GH_TOKEN` / `GITHUB_TOKEN` on the server,
   - `gh auth token --hostname <host>`.
 
-The package is not published yet. During development the host loads it from a local directory. Directory targets probe `<dir>/server` first, then `<dir>/index`, followed by `<dir>/tui` and `<dir>/rpc`, so this repository keeps thin root shims with those names.
+## Install
 
-## Loading locally
+Install the package into OpenCode's plugin cache and register it in the global configuration:
 
-Point your project `opencode.json(c)` at the absolute repository path:
+```sh
+opencode plugin add opencode-nexusnv-github-sidebar
+```
+
+You can also add it to a project `opencode.json(c)` and let OpenCode install it on startup:
 
 ```jsonc
 {
   "plugins": [
     {
-      "package": "/absolute/path/to/opencode-nexusnv-github-sidebar",
+      "package": "opencode-nexusnv-github-sidebar",
     },
   ],
 }
@@ -100,7 +104,7 @@ The server half loads from `opencode.json(c)`; the TUI half is auto-loaded from 
 {
   "plugins": [
     {
-      "package": "/absolute/path/to/opencode-nexusnv-github-sidebar",
+      "package": "opencode-nexusnv-github-sidebar",
       "options": {
         "openLinks": "auto"
       }
@@ -109,7 +113,23 @@ The server half loads from `opencode.json(c)`; the TUI half is auto-loaded from 
 }
 ```
 
-Restart OpenCode after changing server code. If the host never supplies a location, the sidebar stays blank and no RPC is attempted.
+Restart OpenCode after installing or changing server options. If the host never supplies a location, the sidebar stays blank and no RPC is attempted.
+
+### From a local checkout
+
+During development you can point at an absolute directory instead of the registry. Directory targets probe `<dir>/server` first, then `<dir>/index`, followed by `<dir>/tui` and `<dir>/rpc`, so this repository keeps thin root shims with those names.
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "/absolute/path/to/opencode-nexusnv-github-sidebar",
+    },
+  ],
+}
+```
+
+Use the same path in the optional `cli.json` entry when you need `openLinks`. Restart OpenCode after changing server code.
 
 ## Configuration
 

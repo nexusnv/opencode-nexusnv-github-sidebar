@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.1.0] - 2026-10-29
 
 ### Added
 
@@ -31,3 +31,5 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - TUI lifecycle state now lives in `src/tui/state.tsx`. OpenCode 2.2.0 rewrites `solid-js` to the host runtime for `.tsx` sources only; the previous `.ts` module loaded the plugin's own Solid server build, so effects never tracked the host's location and the sidebar stayed on "Loading GitHub…". `test/tui-runtime.test.ts` blocks runtime host imports from `.ts` sources.
+
+[0.1.0]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.0

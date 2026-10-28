@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode-nexusnv-github-sidebar",
   "version": "0.1.0",
-  "private": true,
   "description": "Project-level GitHub workbench for OpenCode V2: pull requests, issues, and worktree-backed sessions in the sidebar.",
   "type": "module",
   "license": "MIT",
@@ -25,6 +24,10 @@
     "tui"
   ],
   "packageManager": "bun@1.4.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "bun": ">=1.4.0"
   },
