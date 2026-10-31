@@ -1,271 +1,354 @@
-import { expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
-import type { Context } from "@opencode/plugin/tui/context"
-import { createSignal } from "solid-js"
 import { GithubSidebarRpc } from "../src/rpc"
 import { MissingLocationError } from "../src/shared/location"
-import { Sidebar, SidebarReady, checkHealth } from "../src/tui"
+import { Sidebar, checkHealth } from "../src/tui"
+import {
+  effectiveView,
+  fakeTui,
+  issueView,
+  pullView,
+  repoRef,
+  sessionInfo,
+  summaryData,
+  summaryResponse,
+} from "./helpers/tui"
 
-type HealthOptions = {
-  readonly location: { readonly directory: string }
-  readonly signal: AbortSignal
+async function renderSidebar(fake: ReturnType<typeof fakeTui>, sessionID = "ses-root", width = 40, height = 24) {
+  return testRender(() => <Sidebar context={fake.context} sessionID={sessionID} />, { width, height })
 }
 
-type HealthCall = (input: unknown, options: HealthOptions) => Promise<unknown>
-
-function fakeContext(
-  location: () => { directory: string; workspaceID?: string; project?: unknown } | undefined,
-  health: HealthCall,
-): Context {
-  return {
-    get location() {
-      return location()
-    },
-    client: {
-      rpc: (contract: unknown) => {
-        expect(contract).toBe(GithubSidebarRpc)
-        return { health }
-      },
-    },
-  } as unknown as Context
-}
-
-test("renders the ready sidebar marker at 36 columns", async () => {
-  const app = await testRender(() => <SidebarReady status="ready" />, { width: 36, height: 3 })
-
-  try {
-    await app.renderOnce()
-    expect(app.captureCharFrame()).toContain("GitHub")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("renders nothing before the server is ready", async () => {
-  const app = await testRender(() => <SidebarReady status="loading" />, { width: 36, height: 3 })
-
-  try {
-    await app.renderOnce()
-    expect(app.captureCharFrame()).not.toContain("GitHub")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("renders an explicit marker when the server is unavailable", async () => {
-  const app = await testRender(() => <SidebarReady status="error" />, { width: 36, height: 3 })
-
-  try {
-    await app.renderOnce()
-    expect(app.captureCharFrame()).toContain("GitHub unavailable")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("checkHealth sends only the wire location and verifies the reply", async () => {
-  const controller = new AbortController()
-  const calls: HealthOptions[] = []
-  const context = fakeContext(
-    () => ({ directory: "/work/repo", project: { id: "project" } }),
-    async (_input, options) => {
-      calls.push(options)
-      return { ok: true, plugin: "github-sidebar", location: "/work/repo" }
-    },
-  )
-
-  expect(await checkHealth(context, controller.signal)).toBe("ready")
-  expect(calls).toHaveLength(1)
-  expect(calls[0]?.location).toEqual({ directory: "/work/repo" })
-  expect(calls[0]?.signal).toBe(controller.signal)
-})
-
-test("checkHealth rejects a reply from another location", async () => {
-  const context = fakeContext(
-    () => ({ directory: "/work/one" }),
-    async () => ({ ok: true, plugin: "github-sidebar", location: "/work/two" }),
-  )
-
-  expect(await checkHealth(context, new AbortController().signal)).toBe("error")
-})
-
-test("checkHealth rejects a reply from another plugin", async () => {
-  const context = fakeContext(
-    () => ({ directory: "/work/one" }),
-    async () => ({ ok: true, plugin: "someone-else", location: "/work/one" }),
-  )
-
-  expect(await checkHealth(context, new AbortController().signal)).toBe("error")
-})
-
-test("checkHealth rejects malformed or negative replies", async () => {
-  const malformed = fakeContext(
-    () => ({ directory: "/work/one" }),
-    async () => ({ ok: "yes", plugin: "github-sidebar", location: "/work/one" }),
-  )
-  const negative = fakeContext(
-    () => ({ directory: "/work/one" }),
-    async () => ({ ok: false, plugin: "github-sidebar", location: "/work/one" }),
-  )
-
-  expect(await checkHealth(malformed, new AbortController().signal)).toBe("error")
-  expect(await checkHealth(negative, new AbortController().signal)).toBe("error")
-})
-
-test("checkHealth refuses a missing location", async () => {
-  const context = fakeContext(
-    () => undefined,
-    async () => ({ ok: true, plugin: "github-sidebar", location: "/work/one" }),
-  )
-
-  await expect(checkHealth(context, new AbortController().signal)).rejects.toThrow(MissingLocationError)
-})
-
-test("Sidebar waits for a location, rechecks on change, and resets to loading", async () => {
-  const [location, setLocation] = createSignal<{ directory: string } | undefined>(undefined)
-  const calls: string[] = []
-  let releaseSecond: ((value: unknown) => void) | undefined
-  const context = fakeContext(
-    () => location(),
-    (_input, options) => {
-      calls.push(options.location.directory)
-      if (options.location.directory === "/work/two") {
-        return new Promise((resolve) => {
-          releaseSecond = resolve
-        })
-      }
-      return Promise.resolve({ ok: true, plugin: "github-sidebar", location: options.location.directory })
-    },
-  )
-
-  const app = await testRender(() => <Sidebar context={context} />, { width: 40, height: 3 })
-  try {
-    await app.renderOnce()
-    expect(calls).toEqual([])
-    expect(app.captureCharFrame()).not.toContain("GitHub")
-
-    setLocation({ directory: "/work/one" })
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(calls).toEqual(["/work/one"])
-    expect(app.captureCharFrame()).toContain("GitHub")
-
-    setLocation({ directory: "/work/two" })
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(calls).toEqual(["/work/one", "/work/two"])
-    expect(app.captureCharFrame()).not.toContain("GitHub")
-
-    releaseSecond?.({ ok: true, plugin: "github-sidebar", location: "/work/two" })
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(app.captureCharFrame()).toContain("GitHub")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("Sidebar rechecks when the workspace changes with the same directory", async () => {
-  const [location, setLocation] = createSignal<{ directory: string; workspaceID: string } | undefined>({
-    directory: "/work/one",
-    workspaceID: "workspace-one",
+describe("checkHealth", () => {
+  test("accepts a matching server response", async () => {
+    const fake = fakeTui()
+    expect(await checkHealth(fake.context, new AbortController().signal)).toBe("ready")
+    expect(fake.calls.health[0]?.options?.location).toEqual({ directory: "/work/repo" })
   })
-  const calls: string[] = []
-  const context = fakeContext(
-    () => location(),
-    async (_input, options) => {
-      calls.push(options.location.directory)
-      return { ok: true, plugin: "github-sidebar", location: options.location.directory }
-    },
-  )
 
-  const app = await testRender(() => <Sidebar context={context} />, { width: 40, height: 3 })
-  try {
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(calls).toEqual(["/work/one"])
+  test("rejects mismatched plugins, locations, and shapes", async () => {
+    for (const reply of [
+      { ok: true, plugin: "other", location: "/work/repo" },
+      { ok: true, plugin: "github-sidebar", location: "/work/other" },
+      { ok: false, plugin: "github-sidebar", location: "/work/repo" },
+      { ok: "yes", plugin: "github-sidebar", location: "/work/repo" },
+    ]) {
+      const fake = fakeTui({ health: async () => reply })
+      expect(await checkHealth(fake.context, new AbortController().signal)).toBe("error")
+    }
+  })
 
-    setLocation({ directory: "/work/one", workspaceID: "workspace-two" })
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(calls).toEqual(["/work/one", "/work/one"])
-    expect(app.captureCharFrame()).toContain("GitHub")
-  } finally {
-    app.renderer.destroy()
-  }
+  test("refuses to guess a missing location", async () => {
+    const fake = fakeTui({ location: () => undefined })
+    expect(checkHealth(fake.context, new AbortController().signal)).rejects.toBeInstanceOf(MissingLocationError)
+    expect(fake.calls.health).toHaveLength(0)
+  })
 })
 
-test("Sidebar stays blank and makes no RPC while the location is missing", async () => {
-  const calls: string[] = []
-  const context = fakeContext(
-    () => undefined,
-    async (_input, options) => {
-      calls.push(options.location.directory)
-      return { ok: true, plugin: "github-sidebar", location: options.location.directory }
-    },
-  )
-  const app = await testRender(() => <Sidebar context={context} />, { width: 40, height: 3 })
+describe("Sidebar states", () => {
+  test("shows a loading state while health is pending", async () => {
+    const fake = fakeTui({ health: () => new Promise(() => undefined) })
+    const app = await renderSidebar(fake)
+    try {
+      await app.renderOnce()
+      expect(app.captureCharFrame()).toContain("Loading GitHub…")
+    } finally {
+      await app.dispose()
+    }
+  })
 
-  try {
-    await app.renderOnce()
-    await Bun.sleep(10)
-    await app.renderOnce()
-    expect(calls).toEqual([])
-    expect(app.captureCharFrame().trim()).toBe("")
-  } finally {
-    app.renderer.destroy()
-  }
+  test("shows an unavailable state when health fails", async () => {
+    const fake = fakeTui({ health: async () => ({ ok: true, plugin: "other", location: "/work/repo" }) })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitForFrame((frame) => frame.includes("GitHub unavailable"))
+      expect(fake.calls.summary).toHaveLength(0)
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("renders the repository header, totals, rows, and more counts", async () => {
+    const fake = fakeTui({
+      summary: async () =>
+        summaryResponse({
+          data: summaryData({
+            pulls: [pullView({ number: 7 }), pullView({ number: 8, title: "Second pull" })],
+            issues: [issueView({ number: 9 })],
+            totals: { pulls: 1_250, issues: 2_513 },
+            rateLimit: { cost: 1, remaining: 42, resetAt: "2026-10-27T07:00:00Z" },
+          }),
+        }),
+    })
+    const app = await renderSidebar(fake, "ses-root", 100)
+    try {
+      const frame = await app.waitForFrame((value) => value.includes("acme/widgets"))
+      expect(frame).toContain("main · 1,250 PRs · 2,513 issues · 42 API left")
+      expect(frame).toContain("▾ Pull requests (1,250)")
+      expect(frame).toContain("#7 Fix the widget")
+      expect(frame).toContain("✓ pass · ready · 3c · 1r · @me")
+      expect(frame).toContain("▾ Issues (2,513)")
+      expect(frame).toContain("#9 Widget request")
+      expect(frame).toContain("+ 1,248 more")
+      expect(frame).toContain("+ 2,512 more")
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("renders empty sections", async () => {
+    const fake = fakeTui({
+      summary: async () =>
+        summaryResponse({
+          data: summaryData({ pulls: [], issues: [], totals: { pulls: 0, issues: 0 } }),
+        }),
+    })
+    const app = await renderSidebar(fake)
+    try {
+      const frame = await app.waitForFrame((value) => value.includes("No open pull requests"))
+      expect(frame).toContain("No open issues")
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("renders an auth status with a connect action", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse({ status: "no-auth", message: "GitHub token not set", data: undefined }),
+    })
+    const app = await renderSidebar(fake)
+    try {
+      const frame = await app.waitForFrame((value) => value.includes("GitHub token not set · /connect"))
+      expect(frame).toContain("acme/widgets")
+
+      await app.mockMouse.click(1, 1)
+      await app.waitFor(() => fake.calls.alerts.length === 1)
+      expect(fake.calls.alerts[0]).toMatchObject({ title: "Connect GitHub" })
+      expect(JSON.stringify(fake.calls.alerts[0])).toContain("/connect")
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("hides unavailable repositories unless the view allows them", async () => {
+    const hidden = fakeTui({
+      summary: async () =>
+        summaryResponse({
+          status: "no-git",
+          data: undefined,
+          view: effectiveView({ display: { showUnavailable: false } }),
+        }),
+    })
+    const hiddenApp = await renderSidebar(hidden)
+    try {
+      await hiddenApp.waitFor(() => hidden.calls.summary.length === 1)
+      await hiddenApp.renderOnce()
+      expect(hiddenApp.captureCharFrame()).not.toContain("Not a git repository")
+    } finally {
+      await hiddenApp.dispose()
+    }
+
+    const shown = fakeTui({
+      summary: async () => summaryResponse({ status: "no-git", data: undefined }),
+    })
+    const shownApp = await renderSidebar(shown)
+    try {
+      await shownApp.waitForFrame((frame) => frame.includes("Not a git repository"))
+    } finally {
+      await shownApp.dispose()
+    }
+  })
+
+  test("renders nothing when the plugin is disabled", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse({ status: "disabled", data: undefined }),
+    })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitFor(() => fake.calls.summary.length === 1)
+      await app.renderOnce()
+      const frame = app.captureCharFrame()
+      expect(frame).not.toContain("acme/widgets")
+      expect(frame).not.toContain("Loading GitHub")
+      expect(frame).not.toContain("GitHub unavailable")
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("marks stale data without hiding it", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse({ status: "stale" }),
+    })
+    const app = await renderSidebar(fake)
+    try {
+      const frame = await app.waitForFrame((value) => value.includes("stale"))
+      expect(frame).toContain("#7 Fix the widget")
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("collapses and expands a section on click", async () => {
+    const fake = fakeTui({ summary: async () => summaryResponse() })
+    const app = await renderSidebar(fake)
+    try {
+      const expanded = await app.waitForFrame((frame) => frame.includes("▾ Pull requests (1)"))
+      expect(expanded).toContain("#7 Fix the widget")
+
+      await app.mockMouse.click(4, 3)
+      const collapsed = await app.waitForFrame((frame) => frame.includes("▸ Pull requests (1)"))
+      expect(collapsed).not.toContain("#7 Fix the widget")
+
+      await app.mockMouse.click(4, 3)
+      await app.waitForFrame((frame) => frame.includes("▾ Pull requests (1)"))
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("persists section collapse across mounts and ignores later config defaults", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse({ view: effectiveView({ display: { collapsed: ["issues"] } }) }),
+    })
+
+    const first = await renderSidebar(fake)
+    try {
+      await first.waitForFrame((frame) => frame.includes("▸ Issues (1)"))
+      await first.mockMouse.click(4, 3)
+      await first.waitForFrame((frame) => frame.includes("▸ Pull requests (1)"))
+    } finally {
+      await first.dispose()
+    }
+
+    const preferences = () => fake.storage.get("preferences") as { initialized?: boolean; collapsed?: string[] }
+    expect(preferences().initialized).toBe(true)
+    expect(preferences().collapsed).toEqual(["issues", "pulls"])
+
+    // A second mount must read storage, not reseed from `display.collapsed`.
+    const second = await renderSidebar(fake)
+    try {
+      const frame = await second.waitForFrame((value) => value.includes("Pull requests (1)"))
+      expect(frame).toContain("▸ Pull requests (1)")
+      expect(frame).toContain("▸ Issues (1)")
+      expect(frame).not.toContain("#7 Fix the widget")
+    } finally {
+      await second.dispose()
+    }
+  })
+
+  test("opens the full-list panel from the header", async () => {
+    const fake = fakeTui({ summary: async () => summaryResponse() })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitForFrame((frame) => frame.includes("acme/widgets"))
+      await app.mockMouse.click(38, 0)
+      await app.waitFor(() => fake.calls.panelOpen.length === 1)
+      expect(fake.calls.panelOpen[0]).toEqual({ name: "github", options: undefined })
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("forces a refresh when the refresh control is clicked", async () => {
+    const fake = fakeTui({ summary: async () => summaryResponse() })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitForFrame((frame) => frame.includes("acme/widgets"))
+      await app.mockMouse.click(39, 0)
+      await app.waitFor(() => fake.calls.summary.length === 2)
+      expect(fake.calls.summary[0]?.input).toEqual({ force: false, full: false })
+      expect(fake.calls.summary[1]?.input).toEqual({ force: true, full: false })
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("reloads when the project location changes", async () => {
+    const fake = fakeTui({
+      summary: async (_input, options) => {
+        const two = options?.location?.directory === "/work/two"
+        const name = two ? "two" : "one"
+        return summaryResponse({ repository: repoRef({ name, nameWithOwner: `acme/${name}` }) })
+      },
+    })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitForFrame((frame) => frame.includes("acme/one"))
+
+      fake.setLocation({ directory: "/work/two" })
+      await app.waitForFrame((frame) => frame.includes("acme/two"))
+      expect(fake.calls.summary.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("does not fetch or render for child sessions", async () => {
+    const fake = fakeTui({
+      sessions: new Map([["ses-child", sessionInfo({ id: "ses-child", parentID: "ses-parent" })]]),
+      summary: async () => summaryResponse(),
+    })
+    const app = await renderSidebar(fake, "ses-child")
+    try {
+      await app.renderOnce()
+      const frame = app.captureCharFrame()
+      expect(frame).not.toContain("acme/widgets")
+      expect(frame).not.toContain("Loading GitHub")
+      expect(fake.calls.health).toHaveLength(0)
+      expect(fake.calls.summary).toHaveLength(0)
+    } finally {
+      await app.dispose()
+    }
+  })
+
+  test("launches from a row click", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse(),
+      prepareLaunch: async () => ({
+        ok: true,
+        code: "ok",
+        message: "",
+        kind: "pull",
+        number: 7,
+        repository: { host: "github.com", nameWithOwner: "acme/widgets", url: "", isPrivate: false },
+        title: "Fix the widget",
+        url: "https://github.com/acme/widgets/pull/7",
+        branch: "pr-7",
+        base: "main",
+        worktree: "/work/worktrees/pr-7",
+        subpath: "",
+        sessionDirectory: "/work/worktrees/pr-7",
+        reused: false,
+        context: "GitHub context",
+        description: "PR #7 · Fix the widget",
+      }),
+    })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitForFrame((frame) => frame.includes("#7 Fix the widget"))
+      await app.mockMouse.click(10, 4)
+      await app.waitFor(() => fake.calls.created.length === 1)
+      expect(fake.calls.prepare[0]?.input).toEqual({ kind: "pull", number: 7 })
+      expect(fake.calls.synthetic[0]).toMatchObject({ resume: false, text: "GitHub context" })
+      expect(fake.calls.focused).toEqual(["session-created"])
+    } finally {
+      await app.dispose()
+    }
+  })
 })
 
-test("Sidebar shows unavailable when the health RPC rejects", async () => {
-  const context = fakeContext(
-    () => ({ directory: "/work/one" }),
-    async () => {
-      throw new Error("server unavailable")
-    },
-  )
-  const app = await testRender(() => <Sidebar context={context} />, { width: 40, height: 3 })
-
-  try {
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(app.captureCharFrame()).toContain("GitHub unavailable")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("Sidebar shows unavailable when the reply comes from another location", async () => {
-  const context = fakeContext(
-    () => ({ directory: "/work/one" }),
-    async () => ({ ok: true, plugin: "github-sidebar", location: "/work/two" }),
-  )
-  const app = await testRender(() => <Sidebar context={context} />, { width: 40, height: 3 })
-
-  try {
-    await app.renderOnce()
-    await Bun.sleep(0)
-    await app.renderOnce()
-    expect(app.captureCharFrame()).toContain("GitHub unavailable")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("Sidebar aborts the in-flight health call on cleanup", async () => {
-  let signal: AbortSignal | undefined
-  const context = fakeContext(
-    () => ({ directory: "/work/one" }),
-    (_input, options) => {
-      signal = options.signal
-      return new Promise(() => undefined)
-    },
-  )
-  const app = await testRender(() => <Sidebar context={context} />, { width: 40, height: 3 })
-
-  await app.renderOnce()
-  expect(signal?.aborted).toBe(false)
-
-  app.renderer.destroy()
-  expect(signal?.aborted).toBe(true)
+describe("RPC contract", () => {
+  test("uses the shared contract for every call", async () => {
+    const fake = fakeTui({
+      summary: async () => summaryResponse({ status: "disabled", data: undefined }),
+    })
+    const app = await renderSidebar(fake)
+    try {
+      await app.waitFor(() => fake.calls.summary.length === 1)
+      expect(fake.calls.contracts.every((contract) => contract === GithubSidebarRpc)).toBe(true)
+      expect(fake.calls.summary[0]?.options?.location).toEqual({ directory: "/work/repo" })
+    } finally {
+      await app.dispose()
+    }
+  })
 })

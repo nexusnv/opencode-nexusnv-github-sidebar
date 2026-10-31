@@ -62,6 +62,8 @@ The second differentiator is **action**. OpenCode exposes worktree creation, ses
 
 **Go/no-go:** build it if you want a zero-`gh`, remote-capable, project-level workbench that both shows GitHub work and starts an OpenCode session from it. If you only need the current branch's PR or PRs created by the current session, existing plugins already cover that well; see §5.
 
+**Implementation status (2026-10-27):** P0 is implemented and tested. The shipped TUI is split into lifecycle state (`src/tui/state.tsx`), rendering (`src/tui/sidebar.tsx`, `row.tsx`), formatting (`format.ts`), link handling (`open.ts`), and launch orchestration (`launch.ts`). Two corrections were found during live validation: the issue launch query uses the `issueOrPullRequest` union (see §10.2.1), and the TUI must not instantiate sidebar state for child sessions because the slot is hidden there.
+
 ### Top risks
 
 | Risk | Why it matters | Mitigation |
@@ -142,9 +144,9 @@ A package can expose three entrypoints:
   "name": "opencode-nexusnv-github-sidebar",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./tui": "./src/tui.tsx",
-    "./rpc": "./src/rpc.ts"
+    ".": "./dist/index.js",
+    "./tui": "./dist/tui.js",
+    "./rpc": "./dist/rpc.js"
   }
 }
 ```
@@ -154,8 +156,10 @@ A package can expose three entrypoints:
 - For packages, `./tui` must be a real `exports` subpath.
 - `@opencode/plugin` is declared for **types**; at runtime the host intercepts `@opencode/plugin/*` and `effect/*` and returns its own instances. `solid-js` also resolves to the host copy, which is what makes plugin JSX and host reactivity share one runtime.
 - Ordinary npm dependencies resolve from the plugin's own `node_modules`; only `effect` and `@opencode/plugin` are substituted.
-- TSX is compiled at runtime on the Bun CLI. The Node path has no transform, so ship compiled JS if you need Node.
+- Local directory plugins are compiled at runtime by Bun and receive OpenTUI's Solid transform. Published packages load from `node_modules`, where OpenTUI deliberately skips the Solid transform, so they must ship compiled ESM. Build with `@opentui/solid/bun-plugin` and keep `@opencode/plugin*`, `@opentui/*`, `solid-js`, and ordinary runtime dependencies external.
 - `opencode plugin add <package>` installs into the global npm plugin cache. If the package has a **server** entrypoint, it is written to global `opencode.json(c)`; if it is TUI-only, it is written to `cli.json`. A combined package therefore lands in `opencode.json`, and the TUI auto-loads it from the server inventory.
+
+`0.1.0` pointed its `exports` at `.ts`/`.tsx` sources and exposed this gap: the installed TUI half loaded as static JSX and never rendered the sidebar. `0.1.2` ships `dist/`, and `pack:check` asserts that the packed TUI entrypoint imports `@opentui/solid` and contains no `@jsxImportSource` pragma. (`0.1.1` was tagged but never published because npm rejected its provenance entry with `TLOG_CREATE_ENTRY_ERROR`.)
 
 ### 4.2 Discovery and options
 
@@ -963,19 +967,29 @@ query LaunchPullContext($owner: String!, $name: String!, $number: Int!) {
 ```graphql
 query LaunchIssueContext($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    issue(number: $number) {
-      title
-      url
-      body
-      state
-      author { login }
-      assignees(first: 10) { nodes { login } }
-      labels(first: 10) { nodes { name } }
-      comments { totalCount }
+    issueOrPullRequest(number: $number) {
+      __typename
+      ... on Issue {
+        title
+        url
+        body
+        state
+        author { login }
+        assignees(first: 10) { nodes { login } }
+        labels(first: 10) { nodes { name } }
+        comments { totalCount }
+      }
     }
   }
 }
 ```
+
+> **Implementation correction (validated live on 2026-10-27):** the schema has no
+> `Issue.pullRequest` field to discriminate the issue path. The checked-in query
+> uses `repository.issueOrPullRequest` with `__typename`, and the server rejects
+> the launch when the number resolves to a `PullRequest`. The earlier
+> `issue(number:)` shape above would have allowed a PR number through the issue
+> path.
 
 Rules:
 
@@ -1402,6 +1416,8 @@ Implementation:
 - Reuse the same RPC summary; the server cache makes opening the panel cheap.
 - Limit to 100 rows per section (the per-request GraphQL maximum) and show `showing 100 of 1,250` with a link to GitHub for more; cursor pagination can come later.
 
+**Implementation status (0.2.0).** Shipped as `session.panel` with `summary({ full: true })`; the server caches one full snapshot and returns every row fetched under `fetchLimit` (default 50, max 100). The panel adds mine/all filters, `j`/`k` navigation, `enter`/`o`/`r`/`m`/`a`/`f`/`esc`, true-total section headers, and a `showing N of TOTAL` line. It does not paginate, search, or filter by review request yet. `ctrl+shift+g` toggles it from any route; child sessions and non-session routes are rejected. The keymap layer is enabled only while the panel is focused.
+
 ### 12.8 Action model: launch from a PR or issue
 
 This is the feature that separates the plugin from `opencode-prs`. `opencode-prs` only knows PRs it watched being created by the current session; it cannot show an existing Dependabot PR, a contributor PR, or an issue, and it cannot start work from one. This plugin lists repo-level items, so the natural next action is: **open the item in OpenCode**.
@@ -1638,9 +1654,9 @@ This is a deliberate product change, not an accident. If browser-on-click is mor
 
 ### P1 — v0.2
 
-- Full-list `session.panel` with keyboard navigation and mine/all filters.
-- Section collapse persisted in TUI storage.
-- `+ N more` and true totals.
+- Full-list `session.panel` with keyboard navigation and mine/all filters. **Shipped in 0.2.0.**
+- Section collapse persisted in TUI storage. **Shipped in 0.2.0**, seeded once from `display.collapsed`.
+- `+ N more` and true totals. **Shipped in P0; reverified in 0.2.0.** The panel adds `showing N of TOTAL`.
 - "Link this session to a PR/issue" action for pre-existing sessions.
 - "Show launch context" read-only dialog.
 - `actions.contextDisplay: "notice" | "message"` with prompt-injection guidance.

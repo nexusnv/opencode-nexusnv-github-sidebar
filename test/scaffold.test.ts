@@ -11,9 +11,10 @@ describe("repository foundation", () => {
 
     expect(pkg.name).toBe("opencode-nexusnv-github-sidebar")
     expect(pkg.type).toBe("module")
-    expect(pkg.exports["."]).toBe("./src/index.ts")
-    expect(pkg.exports["./tui"]).toBe("./src/tui.tsx")
-    expect(pkg.exports["./rpc"]).toBe("./src/rpc.ts")
+    expect(pkg.exports["."]).toBe("./dist/index.js")
+    expect(pkg.exports["./tui"]).toBe("./dist/tui.js")
+    expect(pkg.exports["./rpc"]).toBe("./dist/rpc.js")
+    expect(pkg.files).toContain("dist/")
     expect(pkg.devDependencies["@opencode/plugin"]).toBe("2.1.4")
   })
 

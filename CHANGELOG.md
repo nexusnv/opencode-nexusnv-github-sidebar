@@ -2,10 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.2.0] - 2026-10-29
 
 ### Added
 
+- Full-list GitHub panel on `session.panel`, opened with `ctrl+shift+g` or the `▤` control in the sidebar header. It lists every row fetched under `fetchLimit`, shows true repository totals and `showing N of TOTAL`, and supports mine/all filters, `j`/`k` selection, `enter` launch, `o` browser, `r` refresh, `f` fullscreen, and `esc` close.
+- `summary({ full: true })`: the server caches one full snapshot and derives the bounded sidebar rows from it, so the panel and sidebar share one GraphQL request per cache TTL.
+- Sidebar section collapse now persists in TUI storage across restarts. `display.collapsed` seeds the first run only.
+
+### Changed
+
+- The sidebar refresh control keeps its position next to the new panel control.
+- README, AGENTS.md, and the research report document the panel keys, persistence semantics, and remaining P1 work.
+
+## [0.1.2] - 2026-10-29
+
+### Fixed
+
+- Publish compiled ESM from `dist/` instead of `.ts`/`.tsx` sources. OpenCode applies its Solid transform to local sources but skips `node_modules`, so the `0.1.0` TUI half loaded as static JSX and never rendered the sidebar. Local-directory installs were unaffected. `pack:check` now asserts that the packed TUI entrypoint imports the host `@opentui/solid` runtime and contains no uncompiled JSX pragma.
+- Derive the GitHub `User-Agent` from the package version instead of a hard-coded `0.1.0`.
+
+`0.1.0` is deprecated on npm because its TUI entrypoint cannot run; use `0.1.2`.
+
+`0.1.1` was tagged but never published: npm rejected its provenance entry with `TLOG_CREATE_ENTRY_ERROR` (an equivalent transparency-log entry already existed). `0.1.2` is the first release with the compiled package.
+
+## [0.1.0] - 2026-10-29
+
+### Added
+
+- P0 GitHub workbench: server-side repository detection, integration/env/`gh` auth precedence, one-query GraphQL snapshots, normalization/sanitization, TTL + stale cache, and location-scoped `summary`/`prepareLaunch` RPCs.
+- Sidebar sections for the current-branch PR, the viewer's PRs/issues, and bounded other rows; PR CI/merge/draft/review detail and issue labels/assignees; empty, loading, stale, auth, unavailable, rate-limit, and error states; collapsible sections and refresh controls.
+- Worktree-backed launch: PR head/default-branch fetch, worktree reuse/creation, local branch creation, monorepo subpath handling, session metadata links, synthetic context with `resume: false`, and tab focus / router fallback.
+- Read-only `actions.enabled: false` mode that opens the browser and never touches sessions or git.
+- Server option parsing with an effective view returned over RPC; client-only `openLinks` (`auto`, `browser`, `osc8`).
+- Runtime contract validators on the TUI boundary and safe HTTPS/OSC 8 link handling.
+- Hermetic tests for remote parsing, auth precedence, cache/stale behavior, normalization, context limits, git/launch flows, service orchestration, TUI state/render/launch, and contract validation.
+- Opt-in live smoke test: `GITHUB_SIDEBAR_LIVE=1 bun run smoke:live`.
 - Loadable foundation: server and TUI plugins with a location-scoped `health` RPC, an additive `sidebar.content` claim, and local-directory entrypoint shims.
 - Credential integration methods for `GH_TOKEN`/`GITHUB_TOKEN` and a personal access token, plus a sanitized git environment and required-location guard.
 - Foundation tests: host resolution and loading for directory and package targets, default plugin exports, location enforcement and wire-shape narrowing, location-matched health gating, token stripping, TUI trust-boundary enforcement, and TUI rendering.
@@ -13,4 +45,17 @@ All notable changes to this project will be documented in this file.
 - Bun/TypeScript package contract, strict typecheck, Oxlint, Prettier, CI, secret scanning, dependency audit, and package export check.
 - Initial README, contributor guide, security policy, and agent implementation rules.
 
-P0 GitHub data and launch behavior are not implemented yet.
+### Changed
+
+- The issue launch query uses the `issueOrPullRequest` union because `Issue.pullRequest` does not exist in the GitHub schema.
+- GraphQL issue launch is rejected when the number resolves to a pull request.
+- The TUI hides and does not fetch for child sessions.
+- README requirements now state that the P0 flow is verified on OpenCode 2.2.0 as well as the pinned 2.1.4 types.
+
+### Fixed
+
+- TUI lifecycle state now lives in `src/tui/state.tsx`. OpenCode 2.2.0 rewrites `solid-js` to the host runtime for `.tsx` sources only; the previous `.ts` module loaded the plugin's own Solid server build, so effects never tracked the host's location and the sidebar stayed on "Loading GitHub…". `test/tui-runtime.test.ts` blocks runtime host imports from `.ts` sources.
+
+[0.1.2]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.2
+[0.1.0]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.1.0
+[0.2.0]: https://github.com/nexusnv/opencode-nexusnv-github-sidebar/releases/tag/v0.2.0

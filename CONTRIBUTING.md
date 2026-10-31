@@ -16,7 +16,7 @@ bun run audit
 bun run pack:check
 ```
 
-`bun run check` runs formatting, lint, strict typecheck, and tests. `bun run audit` fails on high/critical dependency advisories. `pack:check` verifies that every `exports` target and local-directory shim is present in the packed tarball.
+`bun run check` runs formatting, lint, strict typecheck, and tests. `bun run audit` fails on high/critical dependency advisories. `pack:check` builds `dist/`, verifies that every `exports` target and local-directory shim is present in the packed tarball, and rejects an uncompiled TUI entrypoint.
 
 ## Scope
 
@@ -39,6 +39,10 @@ Read [AGENTS.md](./AGENTS.md) and §7, §12.8, §14, and §18 of the research re
 ## Security
 
 Never commit tokens, `.env` files, or captured private repository data. Report vulnerabilities privately as described in [SECURITY.md](./SECURITY.md).
+
+## Releasing
+
+Follow [Releasing](./docs/v0.1.0-readiness.md#releasing). Releases are published from a `v*` tag by `.github/workflows/publish.yml`, never from a local working tree. The workflow uses the `NPM_TOKEN` repository secret while it exists and falls back to GitHub OIDC trusted publishing when it is absent. Configure the trusted publisher in the npm web UI first (npm requires an interactive 2FA session), then delete the secret.
 
 ## Commits
 
