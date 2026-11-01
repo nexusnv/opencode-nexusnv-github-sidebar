@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createEffect, createMemo, createSignal } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import type { RGBA } from "@opentui/core"
 
 /**
@@ -38,7 +38,7 @@ export function Marquee(props: {
     const handle = setInterval(() => {
       setOffset((current) => (current + 1) % (text.length + 3))
     }, 120)
-    return () => clearInterval(handle)
+    onCleanup(() => clearInterval(handle))
   })
 
   return (
