@@ -246,6 +246,10 @@ export function launchResult(overrides: Partial<LaunchResult> = {}): LaunchResul
 
 export function fakeTheme() {
   const color = "#aabbcc"
+  const hueScale: Record<number, string> = {}
+  for (const step of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
+    hueScale[step] = color
+  }
   return {
     text: {
       base: color,
@@ -267,6 +271,7 @@ export function fakeTheme() {
       feedback: { error: { base: color } },
     },
     border: { base: color },
+    hue: { accent: hueScale },
   }
 }
 

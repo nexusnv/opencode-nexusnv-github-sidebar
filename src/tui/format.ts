@@ -1,5 +1,6 @@
+import type { RGBA } from "@opentui/core"
 import { CI_META, MERGE_LABEL } from "../shared/status.js"
-import type { Ci, Glyphs, IssueView, LaunchKind, PullView, SectionName, SummaryStatus } from "../shared/types.js"
+import type { Ci, Glyphs, IssueView, LaunchKind, Merge, PullView, SectionName, SummaryStatus } from "../shared/types.js"
 
 export interface GlyphSet {
   readonly branch: string
@@ -11,8 +12,56 @@ export interface GlyphSet {
   readonly panel: string
   readonly down: string
   readonly right: string
-  readonly rule: string
   readonly ci: Readonly<Record<Ci, string>>
+}
+
+/**
+ * Feedback colors keyed by the rollup / merge state, used to color CI and
+ * merge status so a glance at a row conveys whether it is healthy.
+ */
+export interface StatusColors {
+  readonly success: RGBA
+  readonly error: RGBA
+  readonly warning: RGBA
+  readonly info: RGBA
+  readonly faint: RGBA
+}
+
+/** Color a CI rollup state: pass is green, fail is red, running/waiting is amber. */
+export function ciColor(ci: Ci, colors: StatusColors): RGBA {
+  switch (ci) {
+    case "pass":
+      return colors.success
+    case "fail":
+      return colors.error
+    case "run":
+    case "wait":
+      return colors.warning
+    case "none":
+    case "unknown":
+      return colors.faint
+  }
+}
+
+/** Color a merge state: ready/mergeable is green, blocked/conflict/changes is red. */
+export function mergeColor(merge: Merge, colors: StatusColors): RGBA {
+  switch (merge) {
+    case "ready":
+    case "mergeable":
+      return colors.success
+    case "blocked":
+    case "conflict":
+    case "changes":
+      return colors.error
+    case "behind":
+    case "unstable":
+    case "review":
+      return colors.warning
+    case "draft":
+    case "hooks":
+    case "unknown":
+      return colors.faint
+  }
 }
 
 const ASCII_CI: Readonly<Record<Ci, string>> = {
@@ -45,7 +94,6 @@ export function glyphSet(mode: Glyphs): GlyphSet {
       panel: "P",
       down: "v",
       right: ">",
-      rule: "-",
       ci: ASCII_CI,
     }
   }
@@ -57,9 +105,8 @@ export function glyphSet(mode: Glyphs): GlyphSet {
     busy: "…",
     browser: "↗",
     panel: "▤",
-    down: "▾",
-    right: "▸",
-    rule: "─",
+    down: "▼",
+    right: "▶",
     ci: UNICODE_CI,
   }
 }
