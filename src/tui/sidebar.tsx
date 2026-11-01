@@ -225,14 +225,6 @@ function Header(props: {
   )
 }
 
-function Rule(props: { readonly context: Context; readonly glyphs: GlyphSet }) {
-  return (
-    <text fg={props.context.theme.text.faint} wrapMode="none" truncate>
-      {props.glyphs.rule.repeat(200)}
-    </text>
-  )
-}
-
 function Sections(props: {
   readonly context: Context
   readonly state: SidebarState
@@ -260,8 +252,12 @@ function Sections(props: {
   return (
     <For each={view().display.order}>
       {(section) => (
-        <Show when={section === "pulls" ? view().pulls.enabled : view().issues.enabled}>
-          <Rule context={props.context} glyphs={props.glyphs} />
+        <Show
+          when={
+            (section === "pulls" ? view().pulls.enabled : view().issues.enabled) &&
+            (section === "pulls" ? props.data().pulls.length > 0 : props.data().issues.length > 0)
+          }
+        >
           <box flexDirection="column" minWidth={0}>
             <SectionHeader
               context={props.context}

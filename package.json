@@ -32,8 +32,8 @@
     "bun": ">=1.4.0"
   },
   "overrides": {
-    "seroval": "1.6.3",
-    "seroval-plugins": "1.6.3"
+    "seroval": "1.7.6",
+    "seroval-plugins": "1.7.6"
   },
   "exports": {
     ".": "./dist/index.js",

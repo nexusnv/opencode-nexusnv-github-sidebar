@@ -83,10 +83,10 @@ describe("Sidebar states", () => {
     try {
       const frame = await app.waitForFrame((value) => value.includes("acme/widgets"))
       expect(frame).toContain("main · 1,250 PRs · 2,513 issues · 42 API left")
-      expect(frame).toContain("▾ Pull requests (1,250)")
+      expect(frame).toContain("▼ Pull requests (1,250)")
       expect(frame).toContain("#7 Fix the widget")
       expect(frame).toContain("✓ pass · ready · 3c · 1r · @me")
-      expect(frame).toContain("▾ Issues (2,513)")
+      expect(frame).toContain("▼ Issues (2,513)")
       expect(frame).toContain("#9 Widget request")
       expect(frame).toContain("+ 1,248 more")
       expect(frame).toContain("+ 2,512 more")
@@ -95,7 +95,7 @@ describe("Sidebar states", () => {
     }
   })
 
-  test("renders empty sections", async () => {
+  test("renders just the header when there are no pull requests or issues", async () => {
     const fake = fakeTui({
       summary: async () =>
         summaryResponse({
@@ -104,8 +104,10 @@ describe("Sidebar states", () => {
     })
     const app = await renderSidebar(fake)
     try {
-      const frame = await app.waitForFrame((value) => value.includes("No open pull requests"))
-      expect(frame).toContain("No open issues")
+      const frame = await app.waitForFrame((value) => value.includes("acme/widgets"))
+      expect(frame).toContain("main · 0 PRs · 0 issues")
+      expect(frame).not.toContain("No open pull requests")
+      expect(frame).not.toContain("No open issues")
     } finally {
       await app.dispose()
     }
@@ -192,15 +194,16 @@ describe("Sidebar states", () => {
     const fake = fakeTui({ summary: async () => summaryResponse() })
     const app = await renderSidebar(fake)
     try {
-      const expanded = await app.waitForFrame((frame) => frame.includes("▾ Pull requests (1)"))
+      const expanded = await app.waitForFrame((frame) => frame.includes("▼ Pull requests (1)"))
       expect(expanded).toContain("#7 Fix the widget")
 
-      await app.mockMouse.click(4, 3)
-      const collapsed = await app.waitForFrame((frame) => frame.includes("▸ Pull requests (1)"))
+      // The section header moved up one row now that the horizontal rule was removed.
+      await app.mockMouse.click(4, 2)
+      const collapsed = await app.waitForFrame((frame) => frame.includes("▶ Pull requests (1)"))
       expect(collapsed).not.toContain("#7 Fix the widget")
 
-      await app.mockMouse.click(4, 3)
-      await app.waitForFrame((frame) => frame.includes("▾ Pull requests (1)"))
+      await app.mockMouse.click(4, 2)
+      await app.waitForFrame((frame) => frame.includes("▼ Pull requests (1)"))
     } finally {
       await app.dispose()
     }
@@ -213,9 +216,9 @@ describe("Sidebar states", () => {
 
     const first = await renderSidebar(fake)
     try {
-      await first.waitForFrame((frame) => frame.includes("▸ Issues (1)"))
-      await first.mockMouse.click(4, 3)
-      await first.waitForFrame((frame) => frame.includes("▸ Pull requests (1)"))
+      await first.waitForFrame((frame) => frame.includes("▶ Issues (1)"))
+      await first.mockMouse.click(4, 2)
+      await first.waitForFrame((frame) => frame.includes("▶ Pull requests (1)"))
     } finally {
       await first.dispose()
     }
@@ -228,8 +231,8 @@ describe("Sidebar states", () => {
     const second = await renderSidebar(fake)
     try {
       const frame = await second.waitForFrame((value) => value.includes("Pull requests (1)"))
-      expect(frame).toContain("▸ Pull requests (1)")
-      expect(frame).toContain("▸ Issues (1)")
+      expect(frame).toContain("▶ Pull requests (1)")
+      expect(frame).toContain("▶ Issues (1)")
       expect(frame).not.toContain("#7 Fix the widget")
     } finally {
       await second.dispose()

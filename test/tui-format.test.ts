@@ -23,11 +23,9 @@ describe("glyphs and counts", () => {
   test("exposes a single-cell unicode set and an ASCII fallback", () => {
     expect(unicode.branch).toBe("◆")
     expect(unicode.linked).toBe("●")
-    expect(unicode.rule).toBe("─")
     expect(unicode.ci.pass).toBe("✓")
     expect(ascii.branch).toBe("*")
     expect(ascii.linked).toBe("o")
-    expect(ascii.rule).toBe("-")
     expect(ascii.ci.pass).toBe("v")
   })
 
@@ -80,13 +78,13 @@ describe("row markers", () => {
 describe("section titles", () => {
   test("uses the expanded and collapsed chevrons", () => {
     expect(sectionTitle({ section: "pulls", total: 3, collapsed: false, totals: true, glyphs: unicode })).toBe(
-      "▾ Pull requests (3)",
+      "▼ Pull requests (3)",
     )
     expect(sectionTitle({ section: "pulls", total: 3, collapsed: true, totals: true, glyphs: unicode })).toBe(
-      "▸ Pull requests (3)",
+      "▶ Pull requests (3)",
     )
     expect(sectionTitle({ section: "issues", total: 1_250, collapsed: false, totals: true, glyphs: unicode })).toBe(
-      "▾ Issues (1,250)",
+      "▼ Issues (1,250)",
     )
   })
 

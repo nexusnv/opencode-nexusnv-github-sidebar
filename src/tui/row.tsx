@@ -3,7 +3,9 @@ import type { Context } from "@opencode/plugin/tui/context"
 import { Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import type { IssueView, PullView } from "../shared/types.js"
-import { issueDetail, pullDetail, type GlyphSet } from "./format.js"
+import { CI_META, MERGE_LABEL } from "../shared/status.js"
+import { authorLabel, ciColor, formatCount, mergeColor, type GlyphSet, type StatusColors } from "./format.js"
+import { Marquee } from "./marquee.js"
 import { openWithFeedback, safeExternalUrl, type OpenLinks } from "./open.js"
 
 interface MouseLike {
@@ -62,6 +64,11 @@ export function Row(props: {
   )
 }
 
+function pullDetailRest(pull: PullView, viewer: string): string {
+  const author = pull.isMine && viewer ? viewer : pull.author
+  return [`${formatCount(pull.comments)}c`, `${formatCount(pull.reviews)}r`, authorLabel(author)].join(" · ")
+}
+
 export function PullRow(props: {
   readonly context: Context
   readonly pull: PullView
@@ -76,28 +83,48 @@ export function PullRow(props: {
   readonly onActivate: () => void
 }) {
   const theme = props.context.theme
+  const colors: StatusColors = {
+    success: theme.text.feedback.success.base,
+    error: theme.text.feedback.error.base,
+    warning: theme.text.feedback.warning.base,
+    info: theme.text.feedback.info.base,
+    faint: theme.text.faint,
+  }
   const branch = () => props.branchNumber === props.pull.number
-  const color = () => {
+  const markerColor = () => {
     if (branch()) return theme.text.action.primary.base
     if (props.linked) return theme.text.feedback.success.base
     return theme.text.muted
   }
+  const ciFg = ciColor(props.pull.ci, colors)
+  const mergeFg = mergeColor(props.pull.merge, colors)
 
   return (
     <Row context={props.context} onActivate={props.onActivate} id={props.id} selected={props.selected}>
       <box flexDirection="row" minWidth={0}>
-        <text flexShrink={0} fg={color()}>
+        <text flexShrink={0} fg={markerColor()}>
           {props.marker}{" "}
         </text>
-        <text flexGrow={1} flexShrink={1} minWidth={0} wrapMode="none" truncate fg={theme.text.base}>
-          #{props.pull.number} {props.pull.title}
-        </text>
+        <box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Marquee text={`#${props.pull.number} ${props.pull.title}`} fg={theme.hue.accent[500]} />
+        </box>
         <BrowserAction context={props.context} url={props.pull.url} mode={props.mode} label={props.glyphs.browser} />
       </box>
-      <text fg={theme.text.muted} wrapMode="none" truncate>
-        {"  "}
-        {pullDetail(props.pull, props.viewer, props.glyphs)}
-      </text>
+      <box flexDirection="row" minWidth={0}>
+        <text fg={ciFg} wrapMode="none" truncate>
+          {props.glyphs.ci[props.pull.ci]} {CI_META[props.pull.ci].label}
+        </text>
+        <text fg={theme.text.muted} wrapMode="none" truncate>
+          {" · "}
+        </text>
+        <text fg={mergeFg} wrapMode="none" truncate>
+          {MERGE_LABEL[props.pull.merge]}
+        </text>
+        <text fg={theme.text.muted} wrapMode="none" truncate>
+          {" · "}
+          {pullDetailRest(props.pull, props.viewer)}
+        </text>
+      </box>
     </Row>
   )
 }
@@ -116,7 +143,7 @@ export function IssueRow(props: {
   readonly onActivate: () => void
 }) {
   const theme = props.context.theme
-  const color = () => {
+  const markerColor = () => {
     if (props.linked) return theme.text.feedback.success.base
     return theme.text.muted
   }
@@ -124,20 +151,36 @@ export function IssueRow(props: {
   return (
     <Row context={props.context} onActivate={props.onActivate} id={props.id} selected={props.selected}>
       <box flexDirection="row" minWidth={0}>
-        <text flexShrink={0} fg={color()}>
+        <text flexShrink={0} fg={markerColor()}>
           {props.marker}{" "}
         </text>
-        <text flexGrow={1} flexShrink={1} minWidth={0} wrapMode="none" truncate fg={theme.text.base}>
-          #{props.issue.number} {props.issue.title}
-        </text>
+        <box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Marquee text={`#${props.issue.number} ${props.issue.title}`} fg={theme.hue.accent[500]} />
+        </box>
         <BrowserAction context={props.context} url={props.issue.url} mode={props.mode} label={props.glyphs.browser} />
       </box>
       <text fg={theme.text.muted} wrapMode="none" truncate>
         {"  "}
-        {issueDetail(props.issue, props.viewer, props.labels)}
+        {issueDetailRest(props.issue, props.viewer, props.labels)}
       </text>
     </Row>
   )
+}
+
+function issueDetailRest(issue: IssueView, viewer: string, maxLabels: number): string {
+  const labels = issue.labels.slice(0, Math.max(0, maxLabels))
+  const extra = issue.labels.length - labels.length
+  const owner = issue.assignees.some((login) => viewerMatches(login, viewer)) ? "assigned" : authorLabel(issue.author)
+  // Label display is explicitly off; do not leak a hidden-label count.
+  if (maxLabels <= 0) return [`${formatCount(issue.comments)}c`, owner].join(" · ")
+  const parts = [`${formatCount(issue.comments)}c`, ...labels]
+  if (extra > 0) parts.push(`+${extra}`)
+  parts.push(owner)
+  return parts.join(" · ")
+}
+
+function viewerMatches(value: string, viewer: string): boolean {
+  return viewer.length > 0 && value.toLowerCase() === viewer.toLowerCase()
 }
 
 export function SectionHeader(props: {
